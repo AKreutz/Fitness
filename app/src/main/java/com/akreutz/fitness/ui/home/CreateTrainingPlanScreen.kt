@@ -44,18 +44,26 @@ fun CreateTrainingPlanScreen(
 
     val canCreate = planName.isNotBlank() && workoutNames.any { it.isNotBlank() }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(vertical = 144.dp),
+    ) {
         Text(
             text = "Create your training plan",
             style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
         )
         Text(
             text = "Give it a name and add the workouts it's made up of. You can add exercises " +
                 "to each workout later.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
         )
 
         OutlinedTextField(

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Fitness" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Fitness" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/dark_blue_background</item>
+        <item name="android:colorBackground">@color/dark_blue_background</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
 </resources>
