@@ -15,12 +15,12 @@ class HomeViewModelFactory(
     }
 }
 
-class CreateTrainingPlanViewModelFactory(
+class OnboardingViewModelFactory(
     private val repository: TrainingPlanRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        require(modelClass.isAssignableFrom(CreateTrainingPlanViewModel::class.java))
-        return CreateTrainingPlanViewModel(repository) as T
+        require(modelClass.isAssignableFrom(OnboardingViewModel::class.java))
+        return OnboardingViewModel(repository) as T
     }
 }

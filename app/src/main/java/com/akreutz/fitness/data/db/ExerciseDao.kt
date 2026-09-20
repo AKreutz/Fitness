@@ -21,4 +21,7 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE workoutId = :workoutId ORDER BY position")
     fun observeForWorkout(workoutId: Long): Flow<List<Exercise>>
+
+    @Query("SELECT COUNT(*) FROM exercises WHERE workoutId = :workoutId")
+    suspend fun countForWorkout(workoutId: Long): Int
 }

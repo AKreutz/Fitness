@@ -16,13 +16,16 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -34,16 +37,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.ui.home.ActiveTrainingPlanUiState
 import com.akreutz.fitness.ui.home.ActiveTrainingPlanView
-import com.akreutz.fitness.ui.home.CreateTrainingPlanScreen
-import com.akreutz.fitness.ui.home.CreateTrainingPlanViewModel
-import com.akreutz.fitness.ui.home.CreateTrainingPlanViewModelFactory
 import com.akreutz.fitness.ui.home.HomeViewModel
 import com.akreutz.fitness.ui.home.HomeViewModelFactory
+import com.akreutz.fitness.ui.home.OnboardingScreen
 import com.akreutz.fitness.ui.theme.FitnessTheme
 
 class MainActivity : ComponentActivity() {
@@ -70,14 +70,12 @@ class MainActivity : ComponentActivity() {
                 when (val state = activeTrainingPlanState) {
                     is ActiveTrainingPlanUiState.Loading -> LoadingScreen()
                     is ActiveTrainingPlanUiState.NoPlan -> {
-                        val createViewModel: CreateTrainingPlanViewModel = viewModel(
-                            factory = CreateTrainingPlanViewModelFactory(application.trainingPlanRepository),
-                        )
-                        CreateTrainingPlanScreen(
-                            onCreate = { name, workoutNames ->
-                                createViewModel.createTrainingPlan(name, workoutNames)
-                            },
-                        )
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background,
+                        ) {
+                            OnboardingScreen(repository = application.trainingPlanRepository)
+                        }
                     }
                     is ActiveTrainingPlanUiState.Loaded -> FitnessApp(trainingPlan = state)
                 }
@@ -108,7 +106,9 @@ private val destinations = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FitnessApp(trainingPlan: ActiveTrainingPlanUiState.Loaded) {
+fun FitnessApp(
+    trainingPlan: ActiveTrainingPlanUiState.Loaded,
+) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
@@ -128,6 +128,15 @@ fun FitnessApp(trainingPlan: ActiveTrainingPlanUiState.Loaded) {
                         label = { Text(destination.label) },
                     )
                 }
+            }
+        },
+        floatingActionButton = {
+            if (selectedDestination == 0) {
+                ExtendedFloatingActionButton(
+                    text = { Text("Start workout") },
+                    icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                    onClick = { /* TODO: start workout flow */ },
+                )
             }
         },
     ) { innerPadding ->
@@ -162,13 +171,5 @@ internal fun PlaceholderScreen(destination: FitnessDestination, modifier: Modifi
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 12.dp),
         )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun CreateTrainingPlanScreenPreview() {
-    FitnessTheme {
-        CreateTrainingPlanScreen(onCreate = { _, _ -> })
     }
 }

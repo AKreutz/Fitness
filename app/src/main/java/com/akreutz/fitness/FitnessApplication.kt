@@ -14,6 +14,9 @@ class FitnessApplication : Application() {
 
     private val database: FitnessDatabase by lazy {
         Room.databaseBuilder(this, FitnessDatabase::class.java, FitnessDatabase.DATABASE_NAME)
+            // No migrations exist yet; the app is early enough in development that resetting
+            // local data on a schema change is acceptable.
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
 
