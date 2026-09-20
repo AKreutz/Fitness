@@ -1,0 +1,24 @@
+package com.akreutz.fitness.data.db
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Update
+import com.akreutz.fitness.data.model.Exercise
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface ExerciseDao {
+    @Insert
+    suspend fun insert(exercise: Exercise): Long
+
+    @Update
+    suspend fun update(exercise: Exercise)
+
+    @Delete
+    suspend fun delete(exercise: Exercise)
+
+    @Query("SELECT * FROM exercises WHERE workoutId = :workoutId ORDER BY position")
+    fun observeForWorkout(workoutId: Long): Flow<List<Exercise>>
+}
