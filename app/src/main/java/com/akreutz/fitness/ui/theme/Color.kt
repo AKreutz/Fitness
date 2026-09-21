@@ -54,6 +54,7 @@ val ScrimBlack = Color(0xFF000000)
 // Barbell plate colors, one per size in PlateBreakdown.PLATE_SIZES_KG, desaturated to match the
 // app's low-saturation palette instead of using saturated competition-plate colors outright.
 val PlateBlue20 = Color(0xFF5B7FB8)
+val PlateRed = Color(0xFFB85C5C)
 val PlateYellow15 = Color(0xFFC7A94A)
 val PlateGreen10 = Color(0xFF5C9E77)
 val PlateWhite5 = Color(0xFFD8DCE3)

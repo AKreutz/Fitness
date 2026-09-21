@@ -30,6 +30,9 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
+import com.akreutz.fitness.ui.theme.PlateGreen10
+import com.akreutz.fitness.ui.theme.PlateRed
+import com.akreutz.fitness.ui.theme.PlateYellow15
 import java.util.Locale
 
 /**
@@ -150,9 +153,11 @@ private val PerceivedEffort.label: String
 /**
  * Displays the perceived effort of the last time an exercise was performed as a horizontal bar
  * with three equal segments: [PerceivedEffort.EASY] colors in the first segment, MEDIUM the first
- * two, and HARD all three. The effort's label is shown underneath, aligned under the right-most
- * filled segment. When [effortLevel] is null (no performance recorded yet), no segment is
- * filled and a "Nothing on record yet" label spans the full bar width instead.
+ * two, and HARD all three. Filled segments use the same color as the corresponding weight plate:
+ * green for easy, yellow for medium, red for hard. The effort's label is shown underneath,
+ * aligned under the right-most filled segment. When [effortLevel] is null (no performance
+ * recorded yet), no segment is filled and a "Nothing on record yet" label spans the full bar
+ * width instead.
  */
 @Composable
 private fun PerceivedEffortBar(effortLevel: PerceivedEffort?, modifier: Modifier = Modifier) {
@@ -161,6 +166,12 @@ private fun PerceivedEffortBar(effortLevel: PerceivedEffort?, modifier: Modifier
         PerceivedEffort.MEDIUM -> 2
         PerceivedEffort.HARD -> 3
         null -> 0
+    }
+    val filledColor = when (effortLevel) {
+        PerceivedEffort.EASY -> PlateGreen10
+        PerceivedEffort.MEDIUM -> PlateYellow15
+        PerceivedEffort.HARD -> PlateRed
+        null -> MaterialTheme.colorScheme.surfaceContainerHighest
     }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
@@ -172,7 +183,7 @@ private fun PerceivedEffortBar(effortLevel: PerceivedEffort?, modifier: Modifier
         ) {
             repeat(3) { index ->
                 val color = if (index < filledSegments) {
-                    MaterialTheme.colorScheme.primary
+                    filledColor
                 } else {
                     MaterialTheme.colorScheme.surfaceContainerHighest
                 }
@@ -200,7 +211,7 @@ private fun PerceivedEffortBar(effortLevel: PerceivedEffort?, modifier: Modifier
                             Text(
                                 text = effortLevel.label,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = filledColor,
                                 modifier = Modifier.align(Alignment.Center),
                             )
                         }
