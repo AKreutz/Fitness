@@ -25,11 +25,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -152,6 +156,8 @@ private fun InProgressContent(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var cancelConfirmationShown by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -184,7 +190,10 @@ private fun InProgressContent(
             Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
                 Text(state.currentSet.nextLabel)
             }
-            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { cancelConfirmationShown = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text("Cancel")
             }
         }
@@ -202,6 +211,39 @@ private fun InProgressContent(
             onRespond = onRespondToWeightIncreaseOffer,
         )
     }
+
+    if (cancelConfirmationShown) {
+        CancelWorkoutDialog(
+            onConfirm = {
+                cancelConfirmationShown = false
+                onCancel()
+            },
+            onDismiss = { cancelConfirmationShown = false },
+        )
+    }
+}
+
+/**
+ * Confirms that the user wants to cancel the in-progress workout, since doing so discards its
+ * progress (no partial session or ratings are saved).
+ */
+@Composable
+private fun CancelWorkoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cancel workout?") },
+        text = { Text("Your progress in this workout won't be saved.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Cancel workout")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Keep going")
+            }
+        },
+    )
 }
 
 /**
