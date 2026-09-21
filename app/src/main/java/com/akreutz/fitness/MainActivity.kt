@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +52,10 @@ import com.akreutz.fitness.ui.home.ActiveTrainingPlanView
 import com.akreutz.fitness.ui.home.HomeViewModel
 import com.akreutz.fitness.ui.home.HomeViewModelFactory
 import com.akreutz.fitness.ui.home.OnboardingScreen
+import com.akreutz.fitness.ui.profile.PlanEditorScreen
+import com.akreutz.fitness.ui.profile.ProfileScreen
+import com.akreutz.fitness.ui.profile.ProfileViewModel
+import com.akreutz.fitness.ui.profile.ProfileViewModelFactory
 import com.akreutz.fitness.ui.session.WorkoutSessionScreen
 import com.akreutz.fitness.ui.theme.FitnessTheme
 import com.akreutz.fitness.ui.workouts.WorkoutsScreen
@@ -122,6 +127,8 @@ private val destinations = listOf(
 private const val ROUTE_HOME = "home"
 private const val ROUTE_SESSION = "session/{workoutId}"
 private const val ARG_WORKOUT_ID = "workoutId"
+private const val ROUTE_PLAN_EDITOR = "plan-editor/{trainingPlanId}"
+private const val ARG_TRAINING_PLAN_ID = "trainingPlanId"
 
 @Composable
 fun FitnessApp(
@@ -142,6 +149,7 @@ fun FitnessApp(
                 trainingPlan = trainingPlan,
                 homeViewModel = homeViewModel,
                 trainingPlanRepository = trainingPlanRepository,
+                onEditPlan = { trainingPlanId -> navController.navigate("plan-editor/$trainingPlanId") },
             )
         }
         composable(
@@ -156,6 +164,18 @@ fun FitnessApp(
                 onCancel = { navController.popBackStack() },
             )
         }
+        composable(
+            route = ROUTE_PLAN_EDITOR,
+            arguments = listOf(navArgument(ARG_TRAINING_PLAN_ID) { type = NavType.LongType }),
+        ) { backStackEntry ->
+            val trainingPlanId = backStackEntry.arguments?.getLong(ARG_TRAINING_PLAN_ID)
+                ?: return@composable
+            PlanEditorScreen(
+                repository = trainingPlanRepository,
+                trainingPlanId = trainingPlanId,
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }
 
@@ -165,10 +185,15 @@ private fun HomeScreen(
     trainingPlan: ActiveTrainingPlanUiState.Loaded,
     homeViewModel: HomeViewModel,
     trainingPlanRepository: TrainingPlanRepository,
+    onEditPlan: (trainingPlanId: Long) -> Unit,
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
+    var showCreatePlan by rememberSaveable { mutableStateOf(false) }
     val workoutsViewModel: WorkoutsViewModel = viewModel(
         factory = WorkoutsViewModelFactory(trainingPlanRepository),
+    )
+    val profileViewModel: ProfileViewModel = viewModel(
+        factory = ProfileViewModelFactory(trainingPlanRepository),
     )
 
     Scaffold(
@@ -211,6 +236,25 @@ private fun HomeScreen(
                     uiState = workoutHistory,
                     modifier = Modifier.padding(innerPadding),
                 )
+            }
+            3 -> {
+                if (showCreatePlan) {
+                    OnboardingScreen(
+                        repository = trainingPlanRepository,
+                        onFinished = { showCreatePlan = false },
+                        modifier = Modifier.padding(innerPadding),
+                    )
+                } else {
+                    val profileState by profileViewModel.uiState.collectAsState()
+                    ProfileScreen(
+                        uiState = profileState,
+                        onSelectPlan = profileViewModel::selectPlan,
+                        onEditPlan = onEditPlan,
+                        onDeletePlan = profileViewModel::deletePlan,
+                        onCreatePlan = { showCreatePlan = true },
+                        modifier = Modifier.padding(innerPadding),
+                    )
+                }
             }
             else -> PlaceholderScreen(
                 destination = destinations[selectedDestination],

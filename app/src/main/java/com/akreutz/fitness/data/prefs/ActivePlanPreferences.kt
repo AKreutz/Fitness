@@ -38,6 +38,13 @@ class ActivePlanPreferences(private val context: Context) {
         }
     }
 
+    /** Clears the active plan, e.g. after it's been deleted, so the app falls back to no plan. */
+    suspend fun clearActiveTrainingPlanId() {
+        context.activePlanDataStore.edit { preferences ->
+            preferences.remove(activeTrainingPlanIdKey)
+        }
+    }
+
     suspend fun setLastFinishedWorkoutId(id: Long) {
         context.activePlanDataStore.edit { preferences ->
             preferences[lastFinishedWorkoutIdKey] = id

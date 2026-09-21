@@ -1,4 +1,4 @@
-package com.akreutz.fitness.ui.home
+package com.akreutz.fitness.ui.common
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,9 +29,9 @@ import com.akreutz.fitness.data.model.RepScheme
 
 /**
  * Prompts the user for the fields needed to add or edit a
- * [com.akreutz.fitness.data.model.Exercise]. Used from the onboarding flow's add-exercises step.
- * When [initial] is non-null, the fields are prefilled from it and the dialog behaves as an edit
- * rather than an add.
+ * [com.akreutz.fitness.data.model.Exercise]. Used from the onboarding flow's add-exercises step
+ * and from the plan editor. When [initial] is non-null, the fields are prefilled from it and the
+ * dialog behaves as an edit rather than an add.
  */
 @Composable
 fun AddExerciseDialog(
@@ -175,7 +175,7 @@ fun AddExerciseDialog(
     )
 }
 
-internal fun ExerciseType.label(): String = when (this) {
+fun ExerciseType.label(): String = when (this) {
     ExerciseType.FREE_WEIGHTS -> "Free weights"
     ExerciseType.CABLE -> "Cable"
 }
