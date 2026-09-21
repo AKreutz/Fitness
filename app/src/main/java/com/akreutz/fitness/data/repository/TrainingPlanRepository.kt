@@ -146,8 +146,8 @@ class TrainingPlanRepository(
      * finishes, to save the ratings collected along the way together with the session itself.
      * [entries]' weights are passed in by the caller (the weight actually used at the time each
      * exercise was rated) rather than read fresh from the database, so they aren't affected by a
-     * same-session weight increase (see [incrementExerciseWeight]) applied to an earlier-rated
-     * exercise afterwards.
+     * same-session weight increase (see [setExerciseWeight]) applied to an earlier-rated exercise
+     * afterwards.
      */
     suspend fun recordPerceivedEfforts(
         workoutId: Long,
@@ -177,18 +177,18 @@ class TrainingPlanRepository(
     }
 
     /**
-     * Increases the exercise with [exerciseId]'s prescribed [Exercise.weightKg] by its
-     * [Exercise.weightIncrementKg], for next time it's performed. Used when the user opts to
-     * raise the weight after rating an exercise "low" effort twice in a row.
-     * [Exercise.performanceHistory] is left as-is (for later visualization); readers that
-     * consider only the most recent effort should check it was recorded at the current weight,
-     * since after this the latest entry no longer was.
+     * Sets the exercise with [exerciseId]'s prescribed [Exercise.weightKg] to [weightKg], for next
+     * time it's performed. Used when the user opts to raise the weight after rating an exercise
+     * "easy" effort twice in a row: callers compute [weightKg] as
+     * `exercise.weightKg + exercise.weightIncrementKg` for most exercises, but let the user
+     * choose it directly for [ExerciseType.CABLE] ones, since cable machines' weight levels aren't
+     * evenly spaced. [Exercise.performanceHistory] is left as-is (for later visualization);
+     * readers that consider only the most recent effort should check it was recorded at the
+     * current weight, since after this the latest entry no longer was.
      */
-    suspend fun incrementExerciseWeight(exerciseId: Long) {
+    suspend fun setExerciseWeight(exerciseId: Long, weightKg: Double) {
         val exercise = database.exerciseDao().getById(exerciseId) ?: return
-        database.exerciseDao().update(
-            exercise.copy(weightKg = exercise.weightKg + exercise.weightIncrementKg),
-        )
+        database.exerciseDao().update(exercise.copy(weightKg = weightKg))
     }
 
     /** Switches the plan the user is currently associated with to the one with [id]. */

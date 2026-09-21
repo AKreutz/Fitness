@@ -14,15 +14,15 @@ object RepScheme {
 
     /**
      * The single rep target to use for every set of a session, chosen from [reps] by how hard
-     * the exercise's most recent performance felt: [PerceivedEffort.HIGH] or no prior
+     * the exercise's most recent performance felt: [PerceivedEffort.HARD] or no prior
      * performance picks the first (easiest) target, [PerceivedEffort.MEDIUM] the second, and
-     * [PerceivedEffort.LOW] the third.
+     * [PerceivedEffort.EASY] the third.
      */
     fun targetReps(reps: List<Int>, lastPerceivedEffort: PerceivedEffort?): Int {
         val index = when (lastPerceivedEffort) {
-            PerceivedEffort.LOW -> 2
+            PerceivedEffort.EASY -> 2
             PerceivedEffort.MEDIUM -> 1
-            PerceivedEffort.HIGH, null -> 0
+            PerceivedEffort.HARD, null -> 0
         }
         return reps[index.coerceIn(reps.indices)]
     }

@@ -23,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -152,7 +153,7 @@ private fun InProgressContent(
     state: WorkoutSessionUiState.InProgress,
     onNext: () -> Unit,
     onRate: (PerceivedEffort) -> Unit,
-    onRespondToWeightIncreaseOffer: (Boolean) -> Unit,
+    onRespondToWeightIncreaseOffer: (Double?) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -335,9 +336,9 @@ private fun ExerciseHeaderRow(exercise: Exercise, modifier: Modifier = Modifier)
 
 /** How [PerceivedEffort] is labeled in the "last workout" badge. */
 private fun PerceivedEffort.label(): String = when (this) {
-    PerceivedEffort.LOW -> "Low"
+    PerceivedEffort.EASY -> "Easy"
     PerceivedEffort.MEDIUM -> "Medium"
-    PerceivedEffort.HIGH -> "High"
+    PerceivedEffort.HARD -> "Hard"
 }
 
 /**
@@ -465,14 +466,14 @@ private fun RateEffortDialog(exerciseName: String, onRate: (PerceivedEffort) -> 
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = { onRate(PerceivedEffort.LOW) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Low")
+                Button(onClick = { onRate(PerceivedEffort.EASY) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Easy")
                 }
                 Button(onClick = { onRate(PerceivedEffort.MEDIUM) }, modifier = Modifier.fillMaxWidth()) {
                     Text("Medium")
                 }
-                Button(onClick = { onRate(PerceivedEffort.HIGH) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("High")
+                Button(onClick = { onRate(PerceivedEffort.HARD) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Hard")
                 }
             }
         },
@@ -481,33 +482,83 @@ private fun RateEffortDialog(exerciseName: String, onRate: (PerceivedEffort) -> 
 }
 
 /**
- * Prompts the user to raise [exercise]'s prescribed weight by its increment for next time, shown
- * after they rate it "low" effort for the second session in a row. Not dismissible without
- * answering, since the session can't move on without one.
+ * Prompts the user to raise [exercise]'s prescribed weight for next time, shown after they rate
+ * it "easy" effort for the second session in a row. Not dismissible without answering, since the
+ * session can't move on without one. For a [ExerciseType.CABLE] exercise, whose weight levels
+ * aren't evenly spaced, the user types the next weight level directly instead of it being
+ * computed from [Exercise.weightIncrementKg]; for others, the increase is prefilled from
+ * [Exercise.weightIncrementKg] but editable, in case a different bump makes sense just this once.
+ * [onRespond] receives the new weight to persist, or `null` to keep the exercise's current one.
  */
 @Composable
-private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Boolean) -> Unit) {
-    AlertDialog(
-        onDismissRequest = {},
-        title = { Text("Increase the weight?") },
-        text = {
-            Text(
-                String.format(
-                    Locale.US,
-                    "%s has felt easy twice in a row. Raise it from %.1f to %.1f KG for next time?",
-                    exercise.name,
-                    exercise.weightKg,
-                    exercise.weightKg + exercise.weightIncrementKg,
-                ),
-            )
-        },
-        confirmButton = {
-            Button(onClick = { onRespond(true) }) { Text("Increase") }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = { onRespond(false) }) { Text("Keep as is") }
-        },
-    )
+private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Double?) -> Unit) {
+    if (exercise.type == ExerciseType.CABLE) {
+        var weightText by remember { mutableStateOf("") }
+        val newWeightKg = weightText.replace(',', '.').toDoubleOrNull()
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Increase the weight?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "${exercise.name} has felt easy twice in a row. " +
+                            "What weight level should it use next time?",
+                    )
+                    OutlinedTextField(
+                        value = weightText,
+                        onValueChange = { weightText = it },
+                        label = { Text("Next weight (kg)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onRespond(newWeightKg) },
+                    enabled = newWeightKg != null && newWeightKg >= 0,
+                ) { Text("Increase") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { onRespond(null) }) { Text("Keep as is") }
+            },
+        )
+    } else {
+        var incrementText by remember { mutableStateOf(exercise.weightIncrementKg.toString()) }
+        val incrementKg = incrementText.replace(',', '.').toDoubleOrNull()
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Increase the weight?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        String.format(
+                            Locale.US,
+                            "%s has felt easy twice in a row. Raise it from %.1f KG for next time?",
+                            exercise.name,
+                            exercise.weightKg,
+                        ),
+                    )
+                    OutlinedTextField(
+                        value = incrementText,
+                        onValueChange = { incrementText = it },
+                        label = { Text("Weight increase (kg)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onRespond(exercise.weightKg + incrementKg!!) },
+                    enabled = incrementKg != null && incrementKg >= 0,
+                ) { Text("Increase") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { onRespond(null) }) { Text("Keep as is") }
+            },
+        )
+    }
 }
 
 /**

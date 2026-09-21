@@ -51,7 +51,7 @@ fun AddExerciseDialog(
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var type by remember { mutableStateOf(initial?.type ?: ExerciseType.FREE_WEIGHTS) }
     var typeMenuExpanded by remember { mutableStateOf(false) }
-    var setsText by remember { mutableStateOf(initial?.sets?.toString() ?: "") }
+    var setsText by remember { mutableStateOf((initial?.sets ?: 3).toString()) }
     var reps by remember { mutableStateOf(initial?.reps ?: RepScheme.options.first()) }
     var repsMenuExpanded by remember { mutableStateOf(false) }
     var weightText by remember { mutableStateOf(initial?.weightKg?.toString() ?: "") }
@@ -64,7 +64,11 @@ fun AddExerciseDialog(
 
     val sets = setsText.toIntOrNull()
     val weightKg = weightText.replace(',', '.').toDoubleOrNull()
-    val weightIncrementKg = weightIncrementText.replace(',', '.').toDoubleOrNull()
+    val weightIncrementKg = if (type == ExerciseType.CABLE) {
+        0.0
+    } else {
+        weightIncrementText.replace(',', '.').toDoubleOrNull()
+    }
     val restSeconds = restSecondsText.toIntOrNull()
     val canConfirm = name.isNotBlank() && sets != null && sets > 0 &&
         weightKg != null && weightKg >= 0 && weightIncrementKg != null && weightIncrementKg >= 0 &&
@@ -157,13 +161,15 @@ fun AddExerciseDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = weightIncrementText,
-                    onValueChange = { weightIncrementText = it },
-                    label = { Text("Weight increment (kg)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (type != ExerciseType.CABLE) {
+                    OutlinedTextField(
+                        value = weightIncrementText,
+                        onValueChange = { weightIncrementText = it },
+                        label = { Text("Weight increment (kg)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 OutlinedTextField(
                     value = restSecondsText,
                     onValueChange = { restSecondsText = it },

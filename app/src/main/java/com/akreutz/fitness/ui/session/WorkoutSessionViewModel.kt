@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
+import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
@@ -43,7 +44,7 @@ sealed interface WorkoutSessionUiState {
      * [recoverySeconds]). When [exerciseToRate] is non-null, the just-finished exercise is
      * awaiting a perceived-effort rating (via [WorkoutSessionViewModel.rateExercise]) before the
      * session can move on to [exercise]. When [exerciseToOfferWeightIncrease] is non-null (only
-     * possible once [exerciseToRate] is `null` again), the user just rated it "low" effort for
+     * possible once [exerciseToRate] is `null` again), the user just rated it "easy" effort for
      * the second time in a row and is being asked whether to raise its weight for next time (via
      * [WorkoutSessionViewModel.respondToWeightIncreaseOffer]).
      */
@@ -110,7 +111,7 @@ private const val RECOVERY_TICK_MILLIS = 1_000L
  * [advance]. Finishing the warm-up moves straight to the first working set with no rest;
  * finishing any working set but the exercise's last starts a rest timer (counting up past zero
  * once it elapses) that [advance] both stops and steps past. Finishing an exercise's last set
- * prompts for a perceived-effort rating (via [rateExercise]); rating it "low" for the second
+ * prompts for a perceived-effort rating (via [rateExercise]); rating it "easy" for the second
  * session in a row then also prompts whether to raise its weight for next time (via
  * [respondToWeightIncreaseOffer]). Once the workout's last exercise is rated (and any such offer
  * answered), persists all of the session's ratings under today's date and finishes the session.
@@ -258,7 +259,7 @@ class WorkoutSessionViewModel(
 
     /**
      * Records [effort] as the just-finished exercise's rating. If [effort] is
-     * [PerceivedEffort.LOW] and so was that exercise's most recent prior performance, pauses on
+     * [PerceivedEffort.EASY] and so was that exercise's most recent prior performance, pauses on
      * an offer to raise its weight for next time (via [respondToWeightIncreaseOffer]) before
      * moving on; otherwise moves on directly (see [proceedAfterRating]).
      */
@@ -271,7 +272,7 @@ class WorkoutSessionViewModel(
         exerciseToRate.value = null
 
         val lastPerceivedEffort = rated.lastPerformanceAtCurrentWeight?.perceivedEffort
-        if (effort == PerceivedEffort.LOW && lastPerceivedEffort == PerceivedEffort.LOW) {
+        if (effort == PerceivedEffort.EASY && lastPerceivedEffort == PerceivedEffort.EASY) {
             exerciseToOfferWeightIncrease.value = rated
         } else {
             proceedAfterRating()
@@ -279,16 +280,19 @@ class WorkoutSessionViewModel(
     }
 
     /**
-     * Responds to the "raise the weight for next time?" offer: if [increaseWeight], persists the
-     * increase (see [TrainingPlanRepository.incrementExerciseWeight]) before moving on either way
-     * (see [proceedAfterRating]).
+     * Responds to the "raise the weight for next time?" offer: if [newWeightKg] is non-null,
+     * persists it as the exercise's new prescribed weight (see
+     * [TrainingPlanRepository.setExerciseWeight]) before moving on either way (see
+     * [proceedAfterRating]). For [ExerciseType.CABLE] exercises, the caller is expected to have
+     * asked the user for [newWeightKg] directly, since [Exercise.weightIncrementKg] doesn't apply;
+     * for others, it's expected to be `exercise.weightKg + exercise.weightIncrementKg`.
      */
-    fun respondToWeightIncreaseOffer(increaseWeight: Boolean) {
+    fun respondToWeightIncreaseOffer(newWeightKg: Double?) {
         val exercise = exerciseToOfferWeightIncrease.value ?: return
         exerciseToOfferWeightIncrease.value = null
-        if (increaseWeight) {
+        if (newWeightKg != null) {
             viewModelScope.launch {
-                repository.incrementExerciseWeight(exercise.id)
+                repository.setExerciseWeight(exercise.id, newWeightKg)
                 proceedAfterRating()
             }
         } else {

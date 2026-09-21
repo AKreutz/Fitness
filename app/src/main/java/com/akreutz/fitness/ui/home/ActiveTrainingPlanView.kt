@@ -142,24 +142,24 @@ private fun ExerciseCard(exercise: Exercise, modifier: Modifier = Modifier) {
 /** Display label for a [PerceivedEffort] level. */
 private val PerceivedEffort.label: String
     get() = when (this) {
-        PerceivedEffort.LOW -> "Low"
+        PerceivedEffort.EASY -> "Easy"
         PerceivedEffort.MEDIUM -> "Medium"
-        PerceivedEffort.HIGH -> "High"
+        PerceivedEffort.HARD -> "Hard"
     }
 
 /**
  * Displays the perceived effort of the last time an exercise was performed as a horizontal bar
- * with three equal segments: [PerceivedEffort.LOW] colors in the first segment, MEDIUM the first
- * two, and HIGH all three. The effort's label is shown underneath, aligned under the right-most
+ * with three equal segments: [PerceivedEffort.EASY] colors in the first segment, MEDIUM the first
+ * two, and HARD all three. The effort's label is shown underneath, aligned under the right-most
  * filled segment. When [effortLevel] is null (no performance recorded yet), no segment is
  * filled and a "Nothing on record yet" label spans the full bar width instead.
  */
 @Composable
 private fun PerceivedEffortBar(effortLevel: PerceivedEffort?, modifier: Modifier = Modifier) {
     val filledSegments = when (effortLevel) {
-        PerceivedEffort.LOW -> 1
+        PerceivedEffort.EASY -> 1
         PerceivedEffort.MEDIUM -> 2
-        PerceivedEffort.HIGH -> 3
+        PerceivedEffort.HARD -> 3
         null -> 0
     }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {

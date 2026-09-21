@@ -189,9 +189,9 @@ private fun ExerciseStatsRow(
 /** Display label for a [PerceivedEffort] level. */
 private val PerceivedEffort.label: String
     get() = when (this) {
-        PerceivedEffort.LOW -> "Low effort"
+        PerceivedEffort.EASY -> "Easy effort"
         PerceivedEffort.MEDIUM -> "Medium effort"
-        PerceivedEffort.HIGH -> "High effort"
+        PerceivedEffort.HARD -> "Hard effort"
     }
 
 /** Formats a weight in kg, trimming a trailing ".0" (e.g. "42.5" or "40"). */

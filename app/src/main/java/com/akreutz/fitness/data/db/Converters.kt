@@ -31,10 +31,21 @@ class Converters {
                 val (date, weightKg, effort) = record.split(":")
                 LocalDate.parse(date) to ExercisePerformanceEntry(
                     weightKg = weightKg.toDouble(),
-                    perceivedEffort = PerceivedEffort.valueOf(effort),
+                    perceivedEffort = parsePerceivedEffort(effort),
                 )
             }
         }
+
+    /**
+     * Parses a [PerceivedEffort] from its persisted name, tolerating the `LOW`/`HIGH` names it
+     * was previously stored under (renamed to [PerceivedEffort.EASY]/[PerceivedEffort.HARD]) so
+     * that history recorded before the rename still loads.
+     */
+    private fun parsePerceivedEffort(value: String): PerceivedEffort = when (value) {
+        "LOW" -> PerceivedEffort.EASY
+        "HIGH" -> PerceivedEffort.HARD
+        else -> PerceivedEffort.valueOf(value)
+    }
 
     @TypeConverter
     fun fromInstant(value: Instant): Long = value.toEpochMilli()
