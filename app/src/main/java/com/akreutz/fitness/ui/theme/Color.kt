@@ -50,3 +50,14 @@ val InverseSurfaceBlue = Color(0xFFD6DEE8)
 val InverseOnSurfaceBlue = Color(0xFF1B2430)
 val InversePrimaryBlue = Color(0xFF2F5CB8)
 val ScrimBlack = Color(0xFF000000)
+
+// Barbell plate colors, one per size in PlateBreakdown.PLATE_SIZES_KG, desaturated to match the
+// app's low-saturation palette instead of using saturated competition-plate colors outright.
+val PlateBlue20 = Color(0xFF5B7FB8)
+val PlateYellow15 = Color(0xFFC7A94A)
+val PlateGreen10 = Color(0xFF5C9E77)
+val PlateWhite5 = Color(0xFFD8DCE3)
+val OnPlateWhite5 = Color(0xFF1B2430)
+val PlateBlack2_5 = Color(0xFF3A4352)
+val PlateChrome1_25 = Color(0xFFA9B2BF)
+val OnPlateChrome1_25 = Color(0xFF1B2430)

@@ -1,13 +1,11 @@
 package com.akreutz.fitness.ui.session
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -45,6 +49,14 @@ import com.akreutz.fitness.data.model.PlateBreakdown
 import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.ui.theme.OnPlateChrome1_25
+import com.akreutz.fitness.ui.theme.OnPlateWhite5
+import com.akreutz.fitness.ui.theme.PlateBlack2_5
+import com.akreutz.fitness.ui.theme.PlateBlue20
+import com.akreutz.fitness.ui.theme.PlateChrome1_25
+import com.akreutz.fitness.ui.theme.PlateGreen10
+import com.akreutz.fitness.ui.theme.PlateWhite5
+import com.akreutz.fitness.ui.theme.PlateYellow15
 import java.util.Locale
 
 /**
@@ -266,7 +278,7 @@ private fun CurrentExerciseCard(
         ) {
             Text(
                 text = exercise.name,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
             )
             Text(
@@ -278,32 +290,61 @@ private fun CurrentExerciseCard(
             if (setProgress.isWarmUp.not()) {
                 val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
                 val targetReps = RepScheme.targetReps(exercise.reps, lastPerceivedEffort)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 16.dp),
+                ) {
+                    if (exercise.type == ExerciseType.FREE_WEIGHTS) {
+                        PlateBreakdownRow(
+                            weightKg = exercise.weightKg,
+                            modifier = Modifier.padding(end = 16.dp),
+                        )
+                    }
+                    Text(
+                        text = String.format(Locale.US, "%.1f KG", exercise.weightKg),
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
                 Text(
                     text = "$targetReps reps",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = String.format(Locale.US, "%.1f KG", exercise.weightKg),
-                    style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.padding(top = 16.dp),
                 )
-                if (exercise.type == ExerciseType.FREE_WEIGHTS) {
-                    PlateBreakdownRow(
-                        weightKg = exercise.weightKg,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                }
             }
         }
     }
 }
 
 /**
+ * The color a plate of [plateKg] is drawn in, following gym convention (color keyed to size) but
+ * desaturated to match the app's palette. Falls back to the theme's primary color for any size
+ * not in [PlateBreakdown.PLATE_SIZES_KG].
+ */
+@Composable
+private fun plateColor(plateKg: Double): Color = when (plateKg) {
+    20.0 -> PlateBlue20
+    15.0 -> PlateYellow15
+    10.0 -> PlateGreen10
+    5.0 -> PlateWhite5
+    2.5 -> PlateBlack2_5
+    1.25 -> PlateChrome1_25
+    else -> MaterialTheme.colorScheme.primary
+}
+
+/** The color a plate of [plateKg]'s weight label is drawn in, readable against [plateColor]. */
+@Composable
+private fun onPlateColor(plateKg: Double): Color = when (plateKg) {
+    5.0 -> OnPlateWhite5
+    1.25 -> OnPlateChrome1_25
+    else -> Color.White
+}
+
+/**
  * A visual breakdown of the barbell plates needed per side to reach [weightKg]: a side-on view
- * of the bar's sleeve with each plate drawn as a thin vertical bar (a disc seen edge-on), sized
- * by weight and stacked in loading order — largest first, closest to where the bar's collar
- * would sit. Shows nothing if [weightKg] can't be made up exactly from
+ * of the bar's sleeve and collar with each plate drawn as a color-coded disc seen edge-on, sized
+ * by weight, labeled with its weight, and stacked in loading order — largest first, closest to
+ * the collar. Shows nothing if [weightKg] can't be made up exactly from
  * [PlateBreakdown.PLATE_SIZES_KG].
  */
 @Composable
@@ -311,80 +352,135 @@ private fun PlateBreakdownRow(weightKg: Double, modifier: Modifier = Modifier) {
     val plates = PlateBreakdown.forWeight(weightKg)
     if (plates.isEmpty()) return
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier,
-    ) {
-        Text(
-            text = "Plates per side",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        BarbellSideView(
-            plates = plates,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-        )
-    }
+    BarbellSideView(plates = plates, modifier = modifier)
 }
 
 /**
  * Draws the bar's sleeve as a horizontal rod with [plates] slid onto it left to right (largest
- * first, as they'd be loaded closest to the collar), each one a thin vertical bar taller and
- * thicker the heavier it is — a side-on view of a loaded barbell end.
+ * first, as they'd be loaded closest to the collar), each plate a color-coded disc seen edge-on —
+ * taller and thicker the heavier it is — with its weight labeled in the middle.
  */
 @Composable
 private fun BarbellSideView(plates: List<Double>, modifier: Modifier = Modifier) {
     val plateHeight = 64.dp
-    val sleeveHeight = 14.dp
+    val sleeveHeight = 12.dp
     val sleeveColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val plateColor = MaterialTheme.colorScheme.primary
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
+    // Every child (sleeve stub, plates) is drawn against the same plateHeight, so all discs sit
+    // on a shared centerline regardless of their own height.
     Row(
         horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         modifier = modifier.height(plateHeight),
     ) {
         // Short stub of exposed sleeve before the first plate, as on a real bar.
-        Canvas(modifier = Modifier.width(12.dp).height(sleeveHeight)) {
-            drawRect(color = sleeveColor, size = Size(size.width, size.height))
+        Canvas(modifier = Modifier.width(12.dp).height(plateHeight)) {
+            drawRect(
+                color = sleeveColor,
+                topLeft = Offset(0f, (size.height - sleeveHeight.toPx()) / 2f),
+                size = Size(size.width, sleeveHeight.toPx()),
+            )
         }
         for (plateKg in plates) {
-            val width = plateWidth(plateKg)
-            val heightFraction = plateHeightFraction(plateKg)
-            Canvas(
-                modifier = Modifier
-                    .width(width)
-                    .fillMaxHeight(),
-            ) {
-                val plateSize = Size(width = size.width, height = size.height * heightFraction)
-                drawRoundRect(
-                    color = plateColor,
-                    topLeft = Offset(x = 0f, y = (size.height - plateSize.height) / 2f),
-                    size = plateSize,
-                    cornerRadius = CornerRadius(x = size.width * 0.2f, y = size.width * 0.2f),
-                )
+            PlateDisc(
+                plateKg = plateKg,
+                plateHeight = plateHeight,
+                color = plateColor(plateKg),
+                labelColor = onPlateColor(plateKg),
+            )
+        }
+    }
+}
+
+/**
+ * One plate: a color-coded disc seen edge-on, sized by [plateKg] relative to the heaviest
+ * available size, centered within [plateHeight], with its weight labeled in the middle of the
+ * disc, rotated 90° to the left to fit along the plate's long (vertical) axis. The smallest
+ * (1.25kg) plate is drawn unlabeled, at the same height as the 2.5kg plate but half its
+ * thickness — too thin to fit a label.
+ */
+@Composable
+private fun PlateDisc(
+    plateKg: Double,
+    plateHeight: Dp,
+    color: Color,
+    labelColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val width = plateWidth(plateKg)
+    val heightFraction = plateHeightFraction(plateKg)
+    val isSmallestPlate = plateKg == PlateBreakdown.PLATE_SIZES_KG.last()
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(color = labelColor)
+    val label = formatPlateWeight(plateKg)
+
+    Canvas(
+        modifier = modifier
+            .width(width)
+            .height(plateHeight),
+    ) {
+        val plateSize = Size(width = size.width, height = size.height * heightFraction)
+        val topLeft = Offset(x = 0f, y = (size.height - plateSize.height) / 2f)
+        val corner = CornerRadius(x = plateSize.width * 0.25f, y = plateSize.width * 0.25f)
+        drawRoundRect(color = color, topLeft = topLeft, size = plateSize, cornerRadius = corner)
+        // A thin white border so each plate reads distinctly against the dark background, even
+        // for darker plate colors that would otherwise blend into it.
+        drawRoundRect(
+            color = Color.White,
+            topLeft = topLeft,
+            size = plateSize,
+            cornerRadius = corner,
+            style = Stroke(width = 1.dp.toPx()),
+        )
+
+        if (isSmallestPlate.not()) {
+            val textLayout = textMeasurer.measure(text = label, style = labelStyle)
+            val center = Offset(x = plateSize.width / 2f, y = topLeft.y + plateSize.height / 2f)
+            rotate(degrees = -90f, pivot = center) {
+                translate(
+                    left = center.x - textLayout.size.width / 2f,
+                    top = center.y - textLayout.size.height / 2f,
+                ) {
+                    drawText(textLayout)
+                }
             }
         }
     }
 }
 
-/** How wide (thick) a plate is drawn, scaled by [plateKg] relative to the heaviest plate size. */
-@Composable
+/** The weight label drawn on a plate, e.g. "20" or "2.5" — whole numbers without a decimal. */
+private fun formatPlateWeight(plateKg: Double): String =
+    if (plateKg == plateKg.toLong().toDouble()) {
+        plateKg.toLong().toString()
+    } else {
+        String.format(Locale.US, "%.2f", plateKg).trimEnd('0').trimEnd('.')
+    }
+
+/**
+ * How wide (thick) a plate is drawn, scaled by [plateKg] relative to the heaviest plate size.
+ * The 1.25kg plate is the exception: it's drawn at half the width of the 2.5kg plate rather than
+ * scaled from its own weight, since scaling it normally would make it too thin to read.
+ */
 private fun plateWidth(plateKg: Double): Dp {
     val maxWidth = 22.dp
-    val minWidth = 8.dp
+    val minWidth = 10.dp
     val maxPlateKg = PlateBreakdown.PLATE_SIZES_KG.first()
+    if (plateKg == 1.25) return plateWidth(2.5) / 2
     val fraction = (plateKg / maxPlateKg).toFloat().coerceIn(0f, 1f)
     return minWidth + (maxWidth - minWidth) * fraction
 }
 
-/** How tall a plate is drawn, as a fraction of the row's full height, scaled by [plateKg]. */
+/**
+ * How tall a plate is drawn, as a fraction of the row's full height, scaled by [plateKg]. The
+ * 1.25kg plate is the exception: it's drawn at the same height as the 2.5kg plate rather than
+ * scaled from its own (smaller) weight.
+ */
 private fun plateHeightFraction(plateKg: Double): Float {
     val minFraction = 0.55f
     val maxPlateKg = PlateBreakdown.PLATE_SIZES_KG.first()
-    val fraction = (plateKg / maxPlateKg).toFloat().coerceIn(0f, 1f)
+    val effectiveKg = if (plateKg == 1.25) 2.5 else plateKg
+    val fraction = (effectiveKg / maxPlateKg).toFloat().coerceIn(0f, 1f)
     return minFraction + (1f - minFraction) * fraction
 }
 
