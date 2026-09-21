@@ -38,3 +38,15 @@ data class Exercise(
     val position: Int,
     val performanceHistory: ExercisePerformanceHistory = emptyMap(),
 )
+
+/**
+ * The most recent entry in [Exercise.performanceHistory], but only if it was recorded at the
+ * exercise's current [Exercise.weightKg]. Once the weight changes (e.g. after a weight-increase
+ * offer), the latest entry still reflects how the *old* weight felt, which no longer applies to
+ * the new one, so callers that care about "how did this feel most recently" should use this
+ * instead of reading [Exercise.performanceHistory] directly.
+ */
+val Exercise.lastPerformanceAtCurrentWeight: ExercisePerformanceEntry?
+    get() = performanceHistory.maxByOrNull { it.key }
+        ?.value
+        ?.takeIf { it.weightKg == weightKg }
