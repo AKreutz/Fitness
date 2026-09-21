@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 /** A single step within an exercise: the warm-up, then one step per prescribed working set. */
 private sealed interface ExerciseStep {
@@ -113,6 +114,9 @@ class WorkoutSessionViewModel(
     private val repository: TrainingPlanRepository,
     private val workoutId: Long,
 ) : ViewModel() {
+
+    /** When this session began, for computing its duration once it finishes. */
+    private val startedAt = Instant.now()
 
     private val exerciseIndex = MutableStateFlow(0)
     private val step = MutableStateFlow<ExerciseStep>(ExerciseStep.WarmUp)
@@ -288,15 +292,16 @@ class WorkoutSessionViewModel(
     /**
      * Moves on from a just-rated exercise (and any weight-increase offer that followed): to the
      * next exercise, or, if that was the workout's last exercise, persists every rating collected
-     * this session (see [TrainingPlanRepository.recordPerceivedEfforts]), records this workout as
-     * the most recently *finished* one (so [TrainingPlanRepository.nextWorkout] advances the
-     * rotation only now, not when the workout was merely started), and finishes.
+     * this session together with a log of the session itself (see
+     * [TrainingPlanRepository.recordPerceivedEfforts]), records this workout as the most recently
+     * *finished* one (so [TrainingPlanRepository.nextWorkout] advances the rotation only now, not
+     * when the workout was merely started), and finishes.
      */
     private fun proceedAfterRating() {
         val isLastExercise = exerciseIndex.value >= (latestExercises?.lastIndex ?: -1)
         if (isLastExercise) {
             viewModelScope.launch {
-                repository.recordPerceivedEfforts(collectedRatings)
+                repository.recordPerceivedEfforts(workoutId, collectedRatings, startedAt)
                 repository.setLastFinishedWorkout(workoutId)
                 readyToFinish.value = true
             }
