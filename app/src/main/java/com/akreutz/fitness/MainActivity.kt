@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,11 +40,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.home.ActiveTrainingPlanUiState
 import com.akreutz.fitness.ui.home.ActiveTrainingPlanView
 import com.akreutz.fitness.ui.home.HomeViewModel
 import com.akreutz.fitness.ui.home.HomeViewModelFactory
 import com.akreutz.fitness.ui.home.OnboardingScreen
+import com.akreutz.fitness.ui.session.WorkoutSessionScreen
 import com.akreutz.fitness.ui.theme.FitnessTheme
 
 class MainActivity : ComponentActivity() {
@@ -77,7 +85,11 @@ class MainActivity : ComponentActivity() {
                             OnboardingScreen(repository = application.trainingPlanRepository)
                         }
                     }
-                    is ActiveTrainingPlanUiState.Loaded -> FitnessApp(trainingPlan = state)
+                    is ActiveTrainingPlanUiState.Loaded -> FitnessApp(
+                        trainingPlan = state,
+                        homeViewModel = homeViewModel,
+                        trainingPlanRepository = application.trainingPlanRepository,
+                    )
                 }
             }
         }
@@ -104,10 +116,47 @@ private val destinations = listOf(
     FitnessDestination("Profile", Icons.Filled.Person),
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val ROUTE_HOME = "home"
+private const val ROUTE_SESSION = "session/{workoutId}"
+private const val ARG_WORKOUT_ID = "workoutId"
+
 @Composable
 fun FitnessApp(
     trainingPlan: ActiveTrainingPlanUiState.Loaded,
+    homeViewModel: HomeViewModel,
+    trainingPlanRepository: TrainingPlanRepository,
+) {
+    val navController = rememberNavController()
+
+    NavHost(navController = navController, startDestination = ROUTE_HOME) {
+        composable(ROUTE_HOME) {
+            LaunchedEffect(Unit) {
+                homeViewModel.startWorkoutEvents.collect { workoutId ->
+                    navController.navigate("session/$workoutId")
+                }
+            }
+            HomeScreen(trainingPlan = trainingPlan, homeViewModel = homeViewModel)
+        }
+        composable(
+            route = ROUTE_SESSION,
+            arguments = listOf(navArgument(ARG_WORKOUT_ID) { type = NavType.LongType }),
+        ) { backStackEntry ->
+            val workoutId = backStackEntry.arguments?.getLong(ARG_WORKOUT_ID) ?: return@composable
+            WorkoutSessionScreen(
+                repository = trainingPlanRepository,
+                workoutId = workoutId,
+                onFinish = { navController.popBackStack() },
+                onCancel = { navController.popBackStack() },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeScreen(
+    trainingPlan: ActiveTrainingPlanUiState.Loaded,
+    homeViewModel: HomeViewModel,
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
 
@@ -135,14 +184,14 @@ fun FitnessApp(
                 ExtendedFloatingActionButton(
                     text = { Text("Start workout") },
                     icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
-                    onClick = { /* TODO: start workout flow */ },
+                    onClick = { homeViewModel.startNextWorkout() },
                 )
             }
         },
     ) { innerPadding ->
         when (selectedDestination) {
             0 -> ActiveTrainingPlanView(
-                trainingPlan = trainingPlan.trainingPlan,
+                workouts = trainingPlan.workoutsNextFirst,
                 modifier = Modifier.padding(innerPadding),
             )
             else -> PlaceholderScreen(

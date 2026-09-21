@@ -28,17 +28,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.PerceivedEffort
-import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import com.akreutz.fitness.data.model.WorkoutWithExercises
+import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
 import java.util.Locale
 
 /**
  * Shows the user's active Training Plan: each workout as a heading followed by its exercises,
- * two per row in cards, with dividers separating one workout from the next.
+ * two per row in cards, with dividers separating one workout from the next. [workouts] is shown
+ * in the order given, so callers that want the workout up next shown first should reorder it
+ * before passing it in.
  */
 @Composable
 fun ActiveTrainingPlanView(
-    trainingPlan: TrainingPlanWithWorkouts,
+    workouts: List<WorkoutWithExercises>,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -46,7 +48,7 @@ fun ActiveTrainingPlanView(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        itemsIndexed(trainingPlan.workouts) { index, workout ->
+        itemsIndexed(workouts) { index, workout ->
             if (index > 0) {
                 HorizontalDivider(modifier = Modifier.padding(bottom = 16.dp))
             }
@@ -124,8 +126,7 @@ private fun ExerciseCard(exercise: Exercise, modifier: Modifier = Modifier) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    val effortLevel = exercise.performanceHistory.maxByOrNull { it.key }
-                        ?.value?.perceivedEffort
+                    val effortLevel = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
                     PerceivedEffortBar(
                         effortLevel = effortLevel,
                         modifier = Modifier

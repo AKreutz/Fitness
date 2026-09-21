@@ -4,9 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
+import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -15,18 +20,25 @@ import kotlinx.coroutines.launch
 sealed interface ActiveTrainingPlanUiState {
     data object Loading : ActiveTrainingPlanUiState
     data object NoPlan : ActiveTrainingPlanUiState
-    data class Loaded(val trainingPlan: TrainingPlanWithWorkouts) : ActiveTrainingPlanUiState
+
+    /** [workoutsNextFirst] holds the plan's workouts reordered so the one up next comes first. */
+    data class Loaded(
+        val trainingPlan: TrainingPlanWithWorkouts,
+        val workoutsNextFirst: List<WorkoutWithExercises>,
+    ) : ActiveTrainingPlanUiState
 }
 
 class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel() {
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val activeTrainingPlan: StateFlow<ActiveTrainingPlanUiState> =
         repository.observeActiveTrainingPlan()
-            .map { plan ->
+            .flatMapLatest { plan ->
                 if (plan == null) {
-                    ActiveTrainingPlanUiState.NoPlan
+                    flowOf(ActiveTrainingPlanUiState.NoPlan)
                 } else {
-                    ActiveTrainingPlanUiState.Loaded(plan)
+                    repository.observeWorkoutsNextFirst(flowOf(plan))
+                        .map { ordered -> ActiveTrainingPlanUiState.Loaded(plan, ordered) }
                 }
             }
             .stateIn(
@@ -34,6 +46,28 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
                 started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
                 initialValue = ActiveTrainingPlanUiState.Loading,
             )
+
+    private val _startWorkoutEvents = MutableSharedFlow<Long>(extraBufferCapacity = 1)
+
+    /** Emits the id of a [com.akreutz.fitness.data.model.Workout] each time one is started. */
+    val startWorkoutEvents: SharedFlow<Long> = _startWorkoutEvents
+
+    /**
+     * Starts the next workout in the active plan's rotation (see
+     * [TrainingPlanRepository.nextWorkout]) and emits it via [startWorkoutEvents]. No-ops if the
+     * plan isn't loaded yet or has no workouts. The rotation itself only advances once that
+     * workout is actually finished, not just started (see
+     * [com.akreutz.fitness.ui.session.WorkoutSessionViewModel]), so starting the same workout
+     * again (e.g. after cancelling) keeps offering it.
+     */
+    fun startNextWorkout() {
+        val state = activeTrainingPlan.value
+        if (state !is ActiveTrainingPlanUiState.Loaded) return
+        viewModelScope.launch {
+            val workout = repository.nextWorkout(state.trainingPlan) ?: return@launch
+            _startWorkoutEvents.emit(workout.id)
+        }
+    }
 
     /** Adds a new exercise to the workout with [workoutId]. */
     fun addExercise(
