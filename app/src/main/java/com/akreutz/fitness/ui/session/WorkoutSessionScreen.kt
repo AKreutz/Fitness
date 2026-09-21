@@ -1,12 +1,18 @@
 package com.akreutz.fitness.ui.session
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -25,11 +31,17 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.data.model.Exercise
+import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.PerceivedEffort
+import com.akreutz.fitness.data.model.PlateBreakdown
 import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
@@ -276,9 +288,104 @@ private fun CurrentExerciseCard(
                     style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.padding(top = 16.dp),
                 )
+                if (exercise.type == ExerciseType.FREE_WEIGHTS) {
+                    PlateBreakdownRow(
+                        weightKg = exercise.weightKg,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * A visual breakdown of the barbell plates needed per side to reach [weightKg]: a side-on view
+ * of the bar's sleeve with each plate drawn as a thin vertical bar (a disc seen edge-on), sized
+ * by weight and stacked in loading order — largest first, closest to where the bar's collar
+ * would sit. Shows nothing if [weightKg] can't be made up exactly from
+ * [PlateBreakdown.PLATE_SIZES_KG].
+ */
+@Composable
+private fun PlateBreakdownRow(weightKg: Double, modifier: Modifier = Modifier) {
+    val plates = PlateBreakdown.forWeight(weightKg)
+    if (plates.isEmpty()) return
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier,
+    ) {
+        Text(
+            text = "Plates per side",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        BarbellSideView(
+            plates = plates,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+        )
+    }
+}
+
+/**
+ * Draws the bar's sleeve as a horizontal rod with [plates] slid onto it left to right (largest
+ * first, as they'd be loaded closest to the collar), each one a thin vertical bar taller and
+ * thicker the heavier it is — a side-on view of a loaded barbell end.
+ */
+@Composable
+private fun BarbellSideView(plates: List<Double>, modifier: Modifier = Modifier) {
+    val plateHeight = 64.dp
+    val sleeveHeight = 14.dp
+    val sleeveColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val plateColor = MaterialTheme.colorScheme.primary
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.height(plateHeight),
+    ) {
+        // Short stub of exposed sleeve before the first plate, as on a real bar.
+        Canvas(modifier = Modifier.width(12.dp).height(sleeveHeight)) {
+            drawRect(color = sleeveColor, size = Size(size.width, size.height))
+        }
+        for (plateKg in plates) {
+            val width = plateWidth(plateKg)
+            val heightFraction = plateHeightFraction(plateKg)
+            Canvas(
+                modifier = Modifier
+                    .width(width)
+                    .fillMaxHeight(),
+            ) {
+                val plateSize = Size(width = size.width, height = size.height * heightFraction)
+                drawRoundRect(
+                    color = plateColor,
+                    topLeft = Offset(x = 0f, y = (size.height - plateSize.height) / 2f),
+                    size = plateSize,
+                    cornerRadius = CornerRadius(x = size.width * 0.2f, y = size.width * 0.2f),
+                )
+            }
+        }
+    }
+}
+
+/** How wide (thick) a plate is drawn, scaled by [plateKg] relative to the heaviest plate size. */
+@Composable
+private fun plateWidth(plateKg: Double): Dp {
+    val maxWidth = 22.dp
+    val minWidth = 8.dp
+    val maxPlateKg = PlateBreakdown.PLATE_SIZES_KG.first()
+    val fraction = (plateKg / maxPlateKg).toFloat().coerceIn(0f, 1f)
+    return minWidth + (maxWidth - minWidth) * fraction
+}
+
+/** How tall a plate is drawn, as a fraction of the row's full height, scaled by [plateKg]. */
+private fun plateHeightFraction(plateKg: Double): Float {
+    val minFraction = 0.55f
+    val maxPlateKg = PlateBreakdown.PLATE_SIZES_KG.first()
+    val fraction = (plateKg / maxPlateKg).toFloat().coerceIn(0f, 1f)
+    return minFraction + (1f - minFraction) * fraction
 }
 
 /** The label shown for a [SetProgress] on the exercise card, e.g. "Warm-up" or "Set 2 of 3". */
