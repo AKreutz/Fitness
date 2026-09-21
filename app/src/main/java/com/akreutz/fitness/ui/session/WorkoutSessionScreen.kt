@@ -1,23 +1,26 @@
 package com.akreutz.fitness.ui.session
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -29,14 +32,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -151,21 +158,26 @@ private fun InProgressContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Exercise ${state.exerciseNumber} of ${state.totalExercises}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LinearProgressIndicator(
-                    progress = { state.exerciseNumber / state.totalExercises.toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ExerciseDotProgress(
+                exerciseNumber = state.exerciseNumber,
+                totalExercises = state.totalExercises,
+            )
+            ExerciseHeaderRow(exercise = state.exercise)
+            if (state.currentSet.isWarmUp.not()) {
+                SetPillsRow(exercise = state.exercise, setProgress = state.currentSet)
             }
             CurrentExerciseCard(exercise = state.exercise, setProgress = state.currentSet)
-            if (state.recoverySeconds != null) {
-                RecoveryTimer(seconds = state.recoverySeconds)
+            if (state.nextExercise != null) {
+                UpNextRow(exercise = state.nextExercise)
+            }
+            val resting = state.currentSet as? SetProgress.Resting
+            if (state.recoverySeconds != null && resting != null) {
+                RecoveryRow(
+                    seconds = state.recoverySeconds,
+                    goalSeconds = state.recoveryGoalSeconds,
+                    nextSetLabel = resting.nextSetLabel,
+                )
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -188,6 +200,211 @@ private fun InProgressContent(
         WeightIncreaseOfferDialog(
             exercise = exerciseToOfferWeightIncrease,
             onRespond = onRespondToWeightIncreaseOffer,
+        )
+    }
+}
+
+/**
+ * How far through the workout's exercises the user is: one dot per exercise, the current one
+ * shown as a wider pill, with the exact count alongside for precision dots alone don't give.
+ */
+@Composable
+private fun ExerciseDotProgress(
+    exerciseNumber: Int,
+    totalExercises: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        repeat(totalExercises) { index ->
+            val isCurrent = index == exerciseNumber - 1
+            Box(
+                modifier = Modifier
+                    .height(8.dp)
+                    .width(if (isCurrent) 20.dp else 8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        if (isCurrent) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant
+                        },
+                    ),
+            )
+        }
+        Text(
+            text = "$exerciseNumber / $totalExercises",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.End,
+        )
+    }
+}
+
+/**
+ * The current exercise's name, with a badge showing how its most recent performance at its
+ * current weight felt, if it's been performed since it was last at this weight. A performance
+ * recorded at a now-outdated weight (e.g. right before a weight increase) doesn't count, since it
+ * no longer reflects how the exercise feels now.
+ */
+@Composable
+private fun ExerciseHeaderRow(exercise: Exercise, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = exercise.name,
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        val lastEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
+        if (lastEffort != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "Last workout:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = lastEffort.label(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** How [PerceivedEffort] is labeled in the "last workout" badge. */
+private fun PerceivedEffort.label(): String = when (this) {
+    PerceivedEffort.LOW -> "Low"
+    PerceivedEffort.MEDIUM -> "Medium"
+    PerceivedEffort.HIGH -> "High"
+}
+
+/**
+ * All of [exercise]'s working sets at a glance, each a pill showing its target weight and reps:
+ * completed sets dimmed with a checkmark, the current set highlighted, later ones plain. Only
+ * meaningful once warm-up is done, since sets aren't numbered until then.
+ */
+@Composable
+private fun SetPillsRow(exercise: Exercise, setProgress: SetProgress, modifier: Modifier = Modifier) {
+    val currentSetNumber = setProgress.setNumber ?: return
+    val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
+    val targetReps = RepScheme.targetReps(exercise.reps, lastPerceivedEffort)
+    val label = "${formatWeightCompact(exercise.weightKg)}kg×$targetReps"
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        for (setNumber in 1..exercise.sets) {
+            val isDone = setNumber < currentSetNumber
+            val isCurrent = setNumber == currentSetNumber
+            SetPill(
+                setNumber = setNumber,
+                label = label,
+                isDone = isDone,
+                isCurrent = isCurrent,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetPill(
+    setNumber: Int,
+    label: String,
+    isDone: Boolean,
+    isCurrent: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val containerColor = when {
+        isCurrent -> MaterialTheme.colorScheme.surfaceContainerHigh
+        isDone -> MaterialTheme.colorScheme.surfaceContainerHighest
+        else -> MaterialTheme.colorScheme.surface
+    }
+    val contentAlpha = if (isCurrent || isDone) 1f else 0.6f
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .then(
+                if (isCurrent) {
+                    Modifier.border(
+                        width = 1.5.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .background(containerColor)
+            .padding(vertical = 8.dp)
+            .alpha(if (isDone) 0.7f else 1f),
+    ) {
+        Text(
+            text = "SET $setNumber",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isCurrent) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }.copy(alpha = contentAlpha),
+        )
+        Text(
+            text = if (isDone) "✓ $label" else label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+/** A preview strip for whichever exercise comes after the current one. */
+@Composable
+private fun UpNextRow(exercise: Exercise, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = "UP NEXT",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = exercise.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "${exercise.sets} sets",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -252,8 +469,9 @@ private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Boolean) -
 }
 
 /**
- * Card for the exercise currently being guided through: its name, and either "Warm-up" or the
- * prescribed sets/reps/weight, depending on [setProgress].
+ * Card for the exercise currently being guided through: during warm-up, just says so; otherwise
+ * the plate breakdown (for free-weight exercises) on the left and the prescribed weight/reps on
+ * the right.
  */
 @Composable
 private fun CurrentExerciseCard(
@@ -264,57 +482,59 @@ private fun CurrentExerciseCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
         elevation = CardDefaults.elevatedCardElevation(),
     ) {
-        Column(
+        if (setProgress.isWarmUp) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Warm-up",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            return@Card
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(18.dp),
         ) {
-            Text(
-                text = exercise.name,
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = setProgress.label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp),
-            )
-            if (setProgress.isWarmUp.not()) {
-                val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
-                val targetReps = RepScheme.targetReps(exercise.reps, lastPerceivedEffort)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 16.dp),
-                ) {
-                    if (exercise.type == ExerciseType.FREE_WEIGHTS) {
-                        PlateBreakdownRow(
-                            weightKg = exercise.weightKg,
-                            modifier = Modifier.padding(end = 16.dp),
-                        )
-                    }
-                    Text(
-                        text = String.format(Locale.US, "%.1f KG", exercise.weightKg),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
+            if (exercise.type == ExerciseType.FREE_WEIGHTS) {
+                PlateBreakdownRow(weightKg = exercise.weightKg)
+            }
+            val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
+            val targetReps = RepScheme.targetReps(exercise.reps, lastPerceivedEffort)
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "$targetReps reps",
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = String.format(Locale.US, "%.1f KG", exercise.weightKg),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Text(
+                    text = "$targetReps target reps",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 16.dp),
                 )
             }
         }
     }
 }
+
+/** A weight formatted compactly for the set pills, e.g. "45" or "45.5" — no trailing zero. */
+private fun formatWeightCompact(weightKg: Double): String =
+    if (weightKg == weightKg.toLong().toDouble()) {
+        weightKg.toLong().toString()
+    } else {
+        String.format(Locale.US, "%.1f", weightKg)
+    }
 
 /**
  * The color a plate of [plateKg] is drawn in, following gym convention (color keyed to size) but
@@ -499,16 +719,105 @@ private val SetProgress.isWarmUp: Boolean
         is SetProgress.Resting -> completedSet.isWarmUp
     }
 
-/** Shows the running recovery time between sets, counting up past the rest goal once reached. */
+/**
+ * The label for the set coming up once rest ends, e.g. "Set 3 of 3" — one past whichever
+ * [SetProgress.Resting.completedSet] was. Only meaningful while resting.
+ */
+private val SetProgress.Resting.nextSetLabel: String
+    get() {
+        val completed = completedSet as? SetProgress.Working ?: return label
+        return "Set ${completed.setNumber + 1} of ${completed.totalSets}"
+    }
+
+/**
+ * The 1-based set number the set-pills row should treat as current, or `null` during warm-up
+ * (sets aren't numbered yet). While resting, this is the *upcoming* set (one past whichever was
+ * just completed), since that's the one the pills should highlight.
+ */
+private val SetProgress.setNumber: Int?
+    get() = when (this) {
+        SetProgress.WarmUp -> null
+        is SetProgress.Working -> setNumber
+        is SetProgress.Resting -> completedSet.setNumber?.plus(1)
+    }
+
+/**
+ * The rest state between sets: a countdown ring towards [goalSeconds] (filling clockwise, capped
+ * once [seconds] reaches or passes it) with the running time inside, alongside what's resting
+ * towards and what's coming up next.
+ */
 @Composable
-private fun RecoveryTimer(seconds: Int, modifier: Modifier = Modifier) {
+private fun RecoveryRow(
+    seconds: Int,
+    goalSeconds: Int,
+    nextSetLabel: String,
+    modifier: Modifier = Modifier,
+) {
     val minutes = seconds / 60
     val remainingSeconds = seconds % 60
-    Text(
-        text = String.format(Locale.US, "Resting: %d:%02d", minutes, remainingSeconds),
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        textAlign = TextAlign.Center,
-        modifier = modifier.fillMaxWidth(),
-    )
+    val progress = (seconds / goalSeconds.toFloat()).coerceIn(0f, 1f)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(14.dp),
+    ) {
+        RestCountdownRing(progress = progress) {
+            Text(
+                text = String.format(Locale.US, "%d:%02d", minutes, remainingSeconds),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Column {
+            Text(
+                text = "RESTING",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "Next: $nextSetLabel",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** A ring that fills clockwise from the top as [progress] (0f–1f) increases, with [content] inside. */
+@Composable
+private fun RestCountdownRing(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val trackColor = MaterialTheme.colorScheme.outlineVariant
+    val progressColor = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = modifier.size(64.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = 4.dp.toPx()
+            drawArc(
+                color = trackColor,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(width = strokeWidth),
+            )
+            drawArc(
+                color = progressColor,
+                startAngle = -90f,
+                sweepAngle = 360f * progress,
+                useCenter = false,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+            )
+        }
+        content()
+    }
 }

@@ -68,6 +68,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) {
         workouts = workouts.toMutableList().apply {
             val workout = this[workoutIndex]
@@ -79,6 +80,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
                     reps = reps,
                     weightKg = weightKg,
                     weightIncrementKg = weightIncrementKg,
+                    restSeconds = restSeconds,
                 ),
             )
         }
@@ -93,6 +95,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) {
         workouts = workouts.toMutableList().apply {
             val workout = this[workoutIndex]
@@ -105,6 +108,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
                         reps = reps,
                         weightKg = weightKg,
                         weightIncrementKg = weightIncrementKg,
+                        restSeconds = restSeconds,
                     )
                 },
             )

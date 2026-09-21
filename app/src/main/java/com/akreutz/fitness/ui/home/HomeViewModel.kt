@@ -78,6 +78,7 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) {
         viewModelScope.launch {
             repository.addExercise(
@@ -88,6 +89,7 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
                 reps = reps,
                 weightKg = weightKg,
                 weightIncrementKg = weightIncrementKg,
+                restSeconds = restSeconds,
             )
         }
     }

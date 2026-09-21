@@ -11,8 +11,9 @@ import java.time.LocalDate
  * (sets/reps/target weight) for it. [reps] is a preset rep scheme, one target per set (e.g.
  * `[8, 10, 12]`), chosen from a fixed list of options rather than typed freely. [weightKg] is
  * the starting weight, and [weightIncrementKg] is how much it should go up by between
- * progressions. [position] defines its order within the workout. [performanceHistory] records,
- * per date performed, the weight used and the perceived effort of that performance.
+ * progressions. [restSeconds] is how long to rest between working sets during a guided session.
+ * [position] defines its order within the workout. [performanceHistory] records, per date
+ * performed, the weight used and the perceived effort of that performance.
  */
 @Entity(
     tableName = "exercises",
@@ -36,9 +37,15 @@ data class Exercise(
     val reps: List<Int>,
     val weightKg: Double,
     val weightIncrementKg: Double,
+    val restSeconds: Int = DEFAULT_REST_SECONDS,
     val position: Int,
     val performanceHistory: ExercisePerformanceHistory = emptyMap(),
-)
+) {
+    companion object {
+        /** The rest duration assumed for exercises created before [restSeconds] existed. */
+        const val DEFAULT_REST_SECONDS: Int = 90
+    }
+}
 
 /**
  * The most recent entry in [Exercise.performanceHistory], but only if it was recorded at the

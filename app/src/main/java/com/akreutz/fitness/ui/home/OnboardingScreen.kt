@@ -197,6 +197,7 @@ private fun AddExercisesStep(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) -> Unit,
     onUpdateExercise: (
         workoutIndex: Int,
@@ -207,6 +208,7 @@ private fun AddExercisesStep(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) -> Unit,
     onMoveExercise: (workoutIndex: Int, fromIndex: Int, toIndex: Int) -> Unit,
     onRemoveExercise: (workoutIndex: Int, exerciseIndex: Int) -> Unit,
@@ -319,9 +321,18 @@ private fun AddExercisesStep(
                 workoutIndexForDialog = null
                 exerciseIndexForDialog = null
             },
-            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg ->
+            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, restSeconds ->
                 if (exerciseIndex == null) {
-                    onAddExercise(workoutIndex, name, type, sets, reps, weightKg, weightIncrementKg)
+                    onAddExercise(
+                        workoutIndex,
+                        name,
+                        type,
+                        sets,
+                        reps,
+                        weightKg,
+                        weightIncrementKg,
+                        restSeconds,
+                    )
                 } else {
                     onUpdateExercise(
                         workoutIndex,
@@ -332,6 +343,7 @@ private fun AddExercisesStep(
                         reps,
                         weightKg,
                         weightIncrementKg,
+                        restSeconds,
                     )
                 }
                 workoutIndexForDialog = null

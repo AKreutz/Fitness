@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.akreutz.fitness.data.model.DraftExercise
+import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.RepScheme
 
@@ -44,6 +45,7 @@ fun AddExerciseDialog(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) -> Unit,
 ) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
@@ -56,12 +58,17 @@ fun AddExerciseDialog(
     var weightIncrementText by remember {
         mutableStateOf(initial?.weightIncrementKg?.toString() ?: "")
     }
+    var restSecondsText by remember {
+        mutableStateOf((initial?.restSeconds ?: Exercise.DEFAULT_REST_SECONDS).toString())
+    }
 
     val sets = setsText.toIntOrNull()
     val weightKg = weightText.replace(',', '.').toDoubleOrNull()
     val weightIncrementKg = weightIncrementText.replace(',', '.').toDoubleOrNull()
+    val restSeconds = restSecondsText.toIntOrNull()
     val canConfirm = name.isNotBlank() && sets != null && sets > 0 &&
-        weightKg != null && weightKg >= 0 && weightIncrementKg != null && weightIncrementKg >= 0
+        weightKg != null && weightKg >= 0 && weightIncrementKg != null && weightIncrementKg >= 0 &&
+        restSeconds != null && restSeconds > 0
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -157,11 +164,28 @@ fun AddExerciseDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                OutlinedTextField(
+                    value = restSecondsText,
+                    onValueChange = { restSecondsText = it },
+                    label = { Text("Rest between sets (seconds)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name, type, sets!!, reps, weightKg!!, weightIncrementKg!!) },
+                onClick = {
+                    onConfirm(
+                        name,
+                        type,
+                        sets!!,
+                        reps,
+                        weightKg!!,
+                        weightIncrementKg!!,
+                        restSeconds!!,
+                    )
+                },
                 enabled = canConfirm,
             ) {
                 Text(if (initial == null) "Add" else "Save")

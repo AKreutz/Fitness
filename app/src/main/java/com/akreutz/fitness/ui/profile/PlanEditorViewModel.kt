@@ -68,9 +68,19 @@ class PlanEditorViewModel(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) {
         viewModelScope.launch {
-            repository.addExercise(workoutId, name, type, sets, reps, weightKg, weightIncrementKg)
+            repository.addExercise(
+                workoutId,
+                name,
+                type,
+                sets,
+                reps,
+                weightKg,
+                weightIncrementKg,
+                restSeconds,
+            )
         }
     }
 
@@ -82,9 +92,19 @@ class PlanEditorViewModel(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) {
         viewModelScope.launch {
-            repository.updateExercise(exercise, name, type, sets, reps, weightKg, weightIncrementKg)
+            repository.updateExercise(
+                exercise,
+                name,
+                type,
+                sets,
+                reps,
+                weightKg,
+                weightIncrementKg,
+                restSeconds,
+            )
         }
     }
 

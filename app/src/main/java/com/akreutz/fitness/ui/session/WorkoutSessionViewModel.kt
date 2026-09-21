@@ -36,12 +36,15 @@ sealed interface WorkoutSessionUiState {
     /**
      * Guiding the user through the workout's exercises in order, one set at a time. [exercise]
      * is the one currently shown; [exerciseNumber]/[totalExercises] are 1-based, for progress
-     * display (e.g. "2 of 4"). Within [exercise], [currentSet] describes where the user is. When
-     * [exerciseToRate] is non-null, the just-finished exercise is awaiting a perceived-effort
-     * rating (via [WorkoutSessionViewModel.rateExercise]) before the session can move on to
-     * [exercise]. When [exerciseToOfferWeightIncrease] is non-null (only possible once
-     * [exerciseToRate] is `null` again), the user just rated it "low" effort for the second time
-     * in a row and is being asked whether to raise its weight for next time (via
+     * display (e.g. "2 of 4"). Within [exercise], [currentSet] describes where the user is.
+     * [nextExercise] is whichever exercise follows [exercise], or `null` if it's the workout's
+     * last. [recoveryGoalSeconds] is [exercise]'s prescribed rest duration, for showing recovery
+     * progress towards it; it's unrelated to whether the user is currently resting (see
+     * [recoverySeconds]). When [exerciseToRate] is non-null, the just-finished exercise is
+     * awaiting a perceived-effort rating (via [WorkoutSessionViewModel.rateExercise]) before the
+     * session can move on to [exercise]. When [exerciseToOfferWeightIncrease] is non-null (only
+     * possible once [exerciseToRate] is `null` again), the user just rated it "low" effort for
+     * the second time in a row and is being asked whether to raise its weight for next time (via
      * [WorkoutSessionViewModel.respondToWeightIncreaseOffer]).
      */
     data class InProgress(
@@ -49,8 +52,10 @@ sealed interface WorkoutSessionUiState {
         val exercise: Exercise,
         val exerciseNumber: Int,
         val totalExercises: Int,
+        val nextExercise: Exercise?,
         val currentSet: SetProgress,
         val recoverySeconds: Int?,
+        val recoveryGoalSeconds: Int,
         val exerciseToRate: Exercise? = null,
         val exerciseToOfferWeightIncrease: Exercise? = null,
     ) : WorkoutSessionUiState
@@ -190,8 +195,10 @@ class WorkoutSessionViewModel(
                         exercise = exercise,
                         exerciseNumber = progress.exerciseIndex + 1,
                         totalExercises = exercises.size,
+                        nextExercise = exercises.getOrNull(progress.exerciseIndex + 1),
                         currentSet = setProgress,
                         recoverySeconds = progress.recoverySeconds.takeIf { progress.resting },
+                        recoveryGoalSeconds = exercise.restSeconds,
                         exerciseToRate = progress.exerciseToRate,
                         exerciseToOfferWeightIncrease = progress.exerciseToOfferWeightIncrease,
                     )

@@ -82,6 +82,7 @@ class TrainingPlanRepository(
                             reps = exercise.reps,
                             weightKg = exercise.weightKg,
                             weightIncrementKg = exercise.weightIncrementKg,
+                            restSeconds = exercise.restSeconds,
                             position = exerciseIndex,
                         ),
                     )
@@ -220,6 +221,7 @@ class TrainingPlanRepository(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) {
         database.withTransaction {
             val position = database.exerciseDao().countForWorkout(workoutId)
@@ -232,6 +234,7 @@ class TrainingPlanRepository(
                     reps = reps,
                     weightKg = weightKg,
                     weightIncrementKg = weightIncrementKg,
+                    restSeconds = restSeconds,
                     position = position,
                 ),
             )
@@ -299,6 +302,7 @@ class TrainingPlanRepository(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) {
         database.exerciseDao().update(
             exercise.copy(
@@ -308,6 +312,7 @@ class TrainingPlanRepository(
                 reps = reps,
                 weightKg = weightKg,
                 weightIncrementKg = weightIncrementKg,
+                restSeconds = restSeconds,
             ),
         )
     }

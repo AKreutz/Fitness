@@ -147,6 +147,7 @@ private fun PlanEditorContent(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) -> Unit,
     onUpdateExercise: (
         exercise: Exercise,
@@ -156,6 +157,7 @@ private fun PlanEditorContent(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        restSeconds: Int,
     ) -> Unit,
     onDeleteExercise: (exercise: Exercise) -> Unit,
     onMoveExercise: (exercises: List<Exercise>, fromIndex: Int, toIndex: Int) -> Unit,
@@ -288,11 +290,29 @@ private fun PlanEditorContent(
         AddExerciseDialog(
             initial = exercise?.toDraft(),
             onDismiss = { exerciseDialogTarget = null },
-            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg ->
+            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, restSeconds ->
                 if (exercise == null) {
-                    onAddExercise(workout.id, name, type, sets, reps, weightKg, weightIncrementKg)
+                    onAddExercise(
+                        workout.id,
+                        name,
+                        type,
+                        sets,
+                        reps,
+                        weightKg,
+                        weightIncrementKg,
+                        restSeconds,
+                    )
                 } else {
-                    onUpdateExercise(exercise, name, type, sets, reps, weightKg, weightIncrementKg)
+                    onUpdateExercise(
+                        exercise,
+                        name,
+                        type,
+                        sets,
+                        reps,
+                        weightKg,
+                        weightIncrementKg,
+                        restSeconds,
+                    )
                 }
                 exerciseDialogTarget = null
             },
@@ -424,4 +444,5 @@ private fun Exercise.toDraft(): DraftExercise = DraftExercise(
     reps = reps,
     weightKg = weightKg,
     weightIncrementKg = weightIncrementKg,
+    restSeconds = restSeconds,
 )
