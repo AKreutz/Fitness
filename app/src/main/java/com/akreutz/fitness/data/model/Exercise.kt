@@ -10,7 +10,8 @@ import androidx.room.PrimaryKey
  * (sets/reps/target weight) for it. [reps] is a preset rep scheme, one target per set (e.g.
  * `[8, 10, 12]`), chosen from a fixed list of options rather than typed freely. [weightKg] is
  * the starting weight, and [weightIncrementKg] is how much it should go up by between
- * progressions. [position] defines its order within the workout.
+ * progressions. [position] defines its order within the workout. [performanceHistory] records,
+ * per date performed, the weight used and the perceived effort of that performance.
  */
 @Entity(
     tableName = "exercises",
@@ -35,4 +36,5 @@ data class Exercise(
     val weightKg: Double,
     val weightIncrementKg: Double,
     val position: Int,
+    val performanceHistory: ExercisePerformanceHistory = emptyMap(),
 )
