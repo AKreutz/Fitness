@@ -3,7 +3,6 @@ package com.akreutz.fitness.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -27,32 +25,34 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.data.model.DraftExercise
 import com.akreutz.fitness.data.model.DraftWorkout
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.ui.common.AddExerciseDialog
+import com.akreutz.fitness.ui.common.DraggableList
 
 /**
  * The mandatory first-run onboarding flow: name the plan and its workouts, then optionally add
  * exercises to them, before the rest of the app becomes available. Nothing is saved until
  * [OnboardingViewModel.finish] is called, so the back gesture on the exercises step can return to
- * the naming step without touching the database.
+ * the naming step without touching the database. Also reused from the Profile tab to create an
+ * additional plan, via [onFinished].
  */
 @Composable
-fun OnboardingScreen(repository: TrainingPlanRepository, modifier: Modifier = Modifier) {
+fun OnboardingScreen(
+    repository: TrainingPlanRepository,
+    modifier: Modifier = Modifier,
+    onFinished: () -> Unit = {},
+) {
     val viewModel: OnboardingViewModel = viewModel(
         factory = OnboardingViewModelFactory(repository),
     )
@@ -77,7 +77,10 @@ fun OnboardingScreen(repository: TrainingPlanRepository, modifier: Modifier = Mo
                 onUpdateExercise = viewModel::updateExercise,
                 onMoveExercise = viewModel::moveExercise,
                 onRemoveExercise = viewModel::removeExercise,
-                onFinish = viewModel::finish,
+                onFinish = {
+                    viewModel.finish()
+                    onFinished()
+                },
                 modifier = modifier,
             )
         }
@@ -270,17 +273,29 @@ private fun AddExercisesStep(
                             Text("Add exercise")
                         }
                     }
-                    DraggableExerciseList(
-                        exercises = workout.exercises,
-                        onExerciseClick = { exerciseIndex ->
-                            workoutIndexForDialog = index
-                            exerciseIndexForDialog = exerciseIndex
-                        },
-                        onExerciseLongClick = { exerciseIndex ->
-                            exerciseForDeleteConfirm = index to exerciseIndex
-                        },
+                    DraggableList(
+                        items = workout.exercises,
                         onMove = { fromIndex, toIndex -> onMoveExercise(index, fromIndex, toIndex) },
-                    )
+                    ) { exerciseIndex, exercise ->
+                        Text(
+                            text = "${exercise.name} — ${exercise.sets} sets, " +
+                                "${RepScheme.format(exercise.reps)} reps, ${exercise.weightKg}kg " +
+                                "(+${exercise.weightIncrementKg}kg)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .combinedClickable(
+                                    onClick = {
+                                        workoutIndexForDialog = index
+                                        exerciseIndexForDialog = exerciseIndex
+                                    },
+                                    onLongClick = {
+                                        exerciseForDeleteConfirm = index to exerciseIndex
+                                    },
+                                ),
+                        )
+                    }
                 }
             }
         }
@@ -355,102 +370,3 @@ private fun AddExercisesStep(
     }
 }
 
-/**
- * The [exercises] of a single workout, in order, each draggable by its handle to reorder within
- * the list. Dragging past a neighbor's midpoint swaps their positions live; [onMove] is called
- * once the drag ends, with the exercise's start and final index.
- */
-@Composable
-private fun DraggableExerciseList(
-    exercises: List<DraftExercise>,
-    onExerciseClick: (index: Int) -> Unit,
-    onExerciseLongClick: (index: Int) -> Unit,
-    onMove: (fromIndex: Int, toIndex: Int) -> Unit,
-) {
-    // The order shown while a drag is in progress, as a list of original `exercises` indices;
-    // kept in sync with `exercises` otherwise, so reordering during a drag is instant instead of
-    // waiting for the parent's state to round-trip.
-    var displayOrder by remember(exercises) { mutableStateOf(exercises.indices.toList()) }
-    // The original exercise index being dragged, and its current position within `displayOrder`.
-    var draggedExerciseIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffsetY by remember { mutableStateOf(0f) }
-    val rowHeightPx = remember { mutableStateMapOf<Int, Int>() }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        displayOrder.forEachIndexed { displayIndex, exerciseIndex ->
-            val exercise = exercises[exerciseIndex]
-            val isDragged = exerciseIndex == draggedExerciseIndex
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged { rowHeightPx[exerciseIndex] = it.height }
-                    .zIndex(if (isDragged) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = if (isDragged) dragOffsetY else 0f
-                    },
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.DragHandle,
-                    contentDescription = "Drag to reorder",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(end = 4.dp)
-                        .pointerInput(exercises) {
-                            detectDragGestures(
-                                onDragStart = {
-                                    draggedExerciseIndex = exerciseIndex
-                                    dragOffsetY = 0f
-                                },
-                                onDragEnd = {
-                                    val dragged = draggedExerciseIndex
-                                    draggedExerciseIndex = null
-                                    dragOffsetY = 0f
-                                    if (dragged != null) {
-                                        val finalPosition = displayOrder.indexOf(dragged)
-                                        onMove(dragged, finalPosition)
-                                    }
-                                },
-                                onDragCancel = {
-                                    draggedExerciseIndex = null
-                                    dragOffsetY = 0f
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    val dragged = draggedExerciseIndex ?: return@detectDragGestures
-                                    dragOffsetY += dragAmount.y
-                                    val rowHeight = rowHeightPx[dragged] ?: return@detectDragGestures
-                                    val threshold = rowHeight / 2
-                                    val position = displayOrder.indexOf(dragged)
-                                    if (dragOffsetY > threshold && position < displayOrder.lastIndex) {
-                                        displayOrder = displayOrder.toMutableList().apply {
-                                            add(position + 1, removeAt(position))
-                                        }
-                                        dragOffsetY -= rowHeight
-                                    } else if (dragOffsetY < -threshold && position > 0) {
-                                        displayOrder = displayOrder.toMutableList().apply {
-                                            add(position - 1, removeAt(position))
-                                        }
-                                        dragOffsetY += rowHeight
-                                    }
-                                },
-                            )
-                        },
-                )
-                Text(
-                    text = "${exercise.name} — ${exercise.sets} sets, " +
-                        "${RepScheme.format(exercise.reps)} reps, ${exercise.weightKg}kg " +
-                        "(+${exercise.weightIncrementKg}kg)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .combinedClickable(
-                            onClick = { onExerciseClick(exerciseIndex) },
-                            onLongClick = { onExerciseLongClick(exerciseIndex) },
-                        ),
-                )
-            }
-        }
-    }
-}

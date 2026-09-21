@@ -50,6 +50,10 @@ class TrainingPlanRepository(
             if (id == null) flowOf(null) else database.trainingPlanDao().observeById(id)
         }
 
+    /** The plan with [trainingPlanId], or `null` if it doesn't exist (e.g. was just deleted). */
+    fun observeTrainingPlan(trainingPlanId: Long): Flow<TrainingPlanWithWorkouts?> =
+        database.trainingPlanDao().observeById(trainingPlanId)
+
     /**
      * Creates a new [TrainingPlan] with the given [name] and one [Workout] per entry in
      * [workouts] (in order), each with its own drafted exercises, as a single transaction, and
@@ -186,6 +190,24 @@ class TrainingPlanRepository(
         )
     }
 
+    /** Switches the plan the user is currently associated with to the one with [id]. */
+    suspend fun setActiveTrainingPlan(id: Long) {
+        activePlanPreferences.setActiveTrainingPlanId(id)
+    }
+
+    /**
+     * Deletes [trainingPlan] together with its workouts, their exercises, and any workout
+     * sessions logged against them (all cascade via foreign keys). If it was the active plan,
+     * clears that so the app falls back to no plan rather than pointing at a deleted one.
+     */
+    suspend fun deleteTrainingPlan(trainingPlan: TrainingPlan) {
+        val wasActive = activePlanPreferences.activeTrainingPlanId.first() == trainingPlan.id
+        database.trainingPlanDao().delete(trainingPlan)
+        if (wasActive) {
+            activePlanPreferences.clearActiveTrainingPlanId()
+        }
+    }
+
     /**
      * Adds a new [Exercise] to the workout with [workoutId], placed after its existing
      * exercises.
@@ -212,6 +234,113 @@ class TrainingPlanRepository(
                     weightIncrementKg = weightIncrementKg,
                     position = position,
                 ),
+            )
+        }
+    }
+
+    /** Renames [workout] to [name]. Used from the plan editor. */
+    suspend fun renameWorkout(workout: Workout, name: String) {
+        database.workoutDao().update(workout.copy(name = name))
+    }
+
+    /**
+     * Adds a new, empty [Workout] named [name] to the plan with [trainingPlanId], placed after
+     * its existing workouts. Used from the plan editor.
+     */
+    suspend fun addWorkout(trainingPlanId: Long, name: String): Long {
+        return database.withTransaction {
+            val position = database.workoutDao().countForTrainingPlan(trainingPlanId)
+            database.workoutDao().insert(
+                Workout(trainingPlanId = trainingPlanId, name = name, position = position),
+            )
+        }
+    }
+
+    /**
+     * Deletes [workout] together with its exercises and any workout sessions logged against it
+     * (both cascade via foreign keys), then renumbers its remaining sibling workouts so
+     * [Workout.position] stays a dense 0..n-1 sequence. Used from the plan editor.
+     */
+    suspend fun deleteWorkout(workout: Workout) {
+        database.withTransaction {
+            database.workoutDao().delete(workout)
+            val siblings = database.workoutDao().observeForTrainingPlan(workout.trainingPlanId)
+                .first()
+            database.workoutDao().update(
+                siblings.mapIndexedNotNull { index, sibling ->
+                    sibling.workout.takeIf { it.position != index }?.copy(position = index)
+                },
+            )
+        }
+    }
+
+    /**
+     * Reorders the plan with [trainingPlanId]'s workouts to match [orderedWorkoutIds] (every
+     * workout id in the plan, in the desired order). Used from the plan editor's drag-to-reorder.
+     */
+    suspend fun reorderWorkouts(trainingPlanId: Long, orderedWorkoutIds: List<Long>) {
+        database.withTransaction {
+            val workouts = database.workoutDao().observeForTrainingPlan(trainingPlanId).first()
+                .associateBy { it.workout.id }
+            database.workoutDao().update(
+                orderedWorkoutIds.mapIndexedNotNull { index, id ->
+                    workouts[id]?.workout?.takeIf { it.position != index }?.copy(position = index)
+                },
+            )
+        }
+    }
+
+    /** Updates every field of [exercise]. Used from the plan editor. */
+    suspend fun updateExercise(
+        exercise: Exercise,
+        name: String,
+        type: ExerciseType,
+        sets: Int,
+        reps: List<Int>,
+        weightKg: Double,
+        weightIncrementKg: Double,
+    ) {
+        database.exerciseDao().update(
+            exercise.copy(
+                name = name,
+                type = type,
+                sets = sets,
+                reps = reps,
+                weightKg = weightKg,
+                weightIncrementKg = weightIncrementKg,
+            ),
+        )
+    }
+
+    /**
+     * Deletes [exercise], then renumbers its remaining sibling exercises so [Exercise.position]
+     * stays a dense 0..n-1 sequence. Used from the plan editor.
+     */
+    suspend fun deleteExercise(exercise: Exercise) {
+        database.withTransaction {
+            database.exerciseDao().delete(exercise)
+            val siblings = database.exerciseDao().observeForWorkout(exercise.workoutId).first()
+            database.exerciseDao().update(
+                siblings.mapIndexedNotNull { index, sibling ->
+                    sibling.takeIf { it.position != index }?.copy(position = index)
+                },
+            )
+        }
+    }
+
+    /**
+     * Reorders the workout with [workoutId]'s exercises to match [orderedExerciseIds] (every
+     * exercise id in the workout, in the desired order). Used from the plan editor's
+     * drag-to-reorder.
+     */
+    suspend fun reorderExercises(workoutId: Long, orderedExerciseIds: List<Long>) {
+        database.withTransaction {
+            val exercises = database.exerciseDao().observeForWorkout(workoutId).first()
+                .associateBy { it.id }
+            database.exerciseDao().update(
+                orderedExerciseIds.mapIndexedNotNull { index, id ->
+                    exercises[id]?.takeIf { it.position != index }?.copy(position = index)
+                },
             )
         }
     }

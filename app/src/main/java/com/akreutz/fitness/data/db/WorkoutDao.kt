@@ -18,6 +18,9 @@ interface WorkoutDao {
     @Update
     suspend fun update(workout: Workout)
 
+    @Update
+    suspend fun update(workouts: List<Workout>)
+
     @Delete
     suspend fun delete(workout: Workout)
 
@@ -28,4 +31,7 @@ interface WorkoutDao {
     @Transaction
     @Query("SELECT * FROM workouts WHERE trainingPlanId = :trainingPlanId ORDER BY position")
     fun observeForTrainingPlan(trainingPlanId: Long): Flow<List<WorkoutWithExercises>>
+
+    @Query("SELECT COUNT(*) FROM workouts WHERE trainingPlanId = :trainingPlanId")
+    suspend fun countForTrainingPlan(trainingPlanId: Long): Int
 }

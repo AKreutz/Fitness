@@ -16,6 +16,9 @@ interface ExerciseDao {
     @Update
     suspend fun update(exercise: Exercise)
 
+    @Update
+    suspend fun update(exercises: List<Exercise>)
+
     @Delete
     suspend fun delete(exercise: Exercise)
 
