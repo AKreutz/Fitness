@@ -9,6 +9,8 @@ import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import com.akreutz.fitness.data.model.Workout
+import com.akreutz.fitness.data.model.WorkoutSession
+import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.prefs.ActivePlanPreferences
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +19,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -34,6 +38,10 @@ class TrainingPlanRepository(
     /** The workout with [workoutId] together with its exercises, or `null` if it doesn't exist. */
     fun observeWorkout(workoutId: Long): Flow<WorkoutWithExercises?> =
         database.workoutDao().observeById(workoutId)
+
+    /** Every completed [WorkoutSession], each with the [Workout] it was for, most recent first. */
+    fun observeWorkoutSessions(): Flow<List<WorkoutSessionWithWorkout>> =
+        database.workoutSessionDao().observeAllMostRecentFirst()
 
     /** The plan the user is currently associated with, or `null` if none has been created yet. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -128,15 +136,21 @@ class TrainingPlanRepository(
 
     /**
      * Records the user's perceived effort for each exercise in [entries] (exercise id to what to
-     * record), all under today's date, as a single transaction. Used when a guided workout
-     * session finishes, to save the ratings collected along the way. [entries]' weights are
-     * passed in by the caller (the weight actually used at the time each exercise was rated)
-     * rather than read fresh from the database, so they aren't affected by a same-session weight
-     * increase (see [incrementExerciseWeight]) applied to an earlier-rated exercise afterwards.
+     * record), all under today's date, and logs a [WorkoutSession] for [workoutId] that began at
+     * [startedAt] and finishes now, as a single transaction. Used when a guided workout session
+     * finishes, to save the ratings collected along the way together with the session itself.
+     * [entries]' weights are passed in by the caller (the weight actually used at the time each
+     * exercise was rated) rather than read fresh from the database, so they aren't affected by a
+     * same-session weight increase (see [incrementExerciseWeight]) applied to an earlier-rated
+     * exercise afterwards.
      */
-    suspend fun recordPerceivedEfforts(entries: Map<Long, ExercisePerformanceEntry>) {
-        if (entries.isEmpty()) return
+    suspend fun recordPerceivedEfforts(
+        workoutId: Long,
+        entries: Map<Long, ExercisePerformanceEntry>,
+        startedAt: Instant,
+    ) {
         val today = LocalDate.now()
+        val completedAt = Instant.now()
         database.withTransaction {
             entries.forEach { (exerciseId, entry) ->
                 val exercise = database.exerciseDao().getById(exerciseId) ?: return@forEach
@@ -146,6 +160,14 @@ class TrainingPlanRepository(
                     ),
                 )
             }
+            database.workoutSessionDao().insert(
+                WorkoutSession(
+                    workoutId = workoutId,
+                    startedAt = startedAt,
+                    completedAt = completedAt,
+                    durationSeconds = Duration.between(startedAt, completedAt).seconds,
+                ),
+            )
         }
     }
 

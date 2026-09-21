@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.time.LocalDate
 
 /**
  * A single exercise within a [Workout]: a name, its equipment [type], and the prescription
@@ -50,3 +51,12 @@ val Exercise.lastPerformanceAtCurrentWeight: ExercisePerformanceEntry?
     get() = performanceHistory.maxByOrNull { it.key }
         ?.value
         ?.takeIf { it.weightKg == weightKg }
+
+/**
+ * This exercise's [ExercisePerformanceEntry] recorded on [date], or `null` if it wasn't performed
+ * (or rated) that day. Used to show a past [com.akreutz.fitness.data.model.WorkoutSession]'s
+ * per-exercise stats, since sessions don't keep their own snapshot of them; note this is
+ * ambiguous if the same workout (and so the same exercise) was completed more than once on
+ * [date], since [performanceHistory] only keeps one entry per day.
+ */
+fun Exercise.performanceOn(date: LocalDate): ExercisePerformanceEntry? = performanceHistory[date]

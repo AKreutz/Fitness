@@ -6,10 +6,11 @@ import androidx.room.TypeConverters
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.Workout
+import com.akreutz.fitness.data.model.WorkoutSession
 
 @Database(
-    entities = [TrainingPlan::class, Workout::class, Exercise::class],
-    version = 4,
+    entities = [TrainingPlan::class, Workout::class, Exercise::class, WorkoutSession::class],
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -17,6 +18,7 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun trainingPlanDao(): TrainingPlanDao
     abstract fun workoutDao(): WorkoutDao
     abstract fun exerciseDao(): ExerciseDao
+    abstract fun workoutSessionDao(): WorkoutSessionDao
 
     companion object {
         const val DATABASE_NAME = "fitness.db"

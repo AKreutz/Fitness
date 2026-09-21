@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
 import com.akreutz.fitness.data.model.ExercisePerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
+import java.time.Instant
 import java.time.LocalDate
 
 /** Room type converters for column types it can't persist natively. */
@@ -34,4 +35,10 @@ class Converters {
                 )
             }
         }
+
+    @TypeConverter
+    fun fromInstant(value: Instant): Long = value.toEpochMilli()
+
+    @TypeConverter
+    fun toInstant(value: Long): Instant = Instant.ofEpochMilli(value)
 }

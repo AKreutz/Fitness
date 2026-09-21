@@ -53,6 +53,9 @@ import com.akreutz.fitness.ui.home.HomeViewModelFactory
 import com.akreutz.fitness.ui.home.OnboardingScreen
 import com.akreutz.fitness.ui.session.WorkoutSessionScreen
 import com.akreutz.fitness.ui.theme.FitnessTheme
+import com.akreutz.fitness.ui.workouts.WorkoutsScreen
+import com.akreutz.fitness.ui.workouts.WorkoutsViewModel
+import com.akreutz.fitness.ui.workouts.WorkoutsViewModelFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -135,7 +138,11 @@ fun FitnessApp(
                     navController.navigate("session/$workoutId")
                 }
             }
-            HomeScreen(trainingPlan = trainingPlan, homeViewModel = homeViewModel)
+            HomeScreen(
+                trainingPlan = trainingPlan,
+                homeViewModel = homeViewModel,
+                trainingPlanRepository = trainingPlanRepository,
+            )
         }
         composable(
             route = ROUTE_SESSION,
@@ -157,8 +164,12 @@ fun FitnessApp(
 private fun HomeScreen(
     trainingPlan: ActiveTrainingPlanUiState.Loaded,
     homeViewModel: HomeViewModel,
+    trainingPlanRepository: TrainingPlanRepository,
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
+    val workoutsViewModel: WorkoutsViewModel = viewModel(
+        factory = WorkoutsViewModelFactory(trainingPlanRepository),
+    )
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -194,6 +205,13 @@ private fun HomeScreen(
                 workouts = trainingPlan.workoutsNextFirst,
                 modifier = Modifier.padding(innerPadding),
             )
+            1 -> {
+                val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
+                WorkoutsScreen(
+                    uiState = workoutHistory,
+                    modifier = Modifier.padding(innerPadding),
+                )
+            }
             else -> PlaceholderScreen(
                 destination = destinations[selectedDestination],
                 modifier = Modifier.padding(innerPadding),

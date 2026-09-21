@@ -1,0 +1,25 @@
+package com.akreutz.fitness.data.model
+
+import androidx.room.Embedded
+import androidx.room.Relation
+
+/**
+ * A [WorkoutSession] together with the [Workout] it was for and that workout's [Exercise]s.
+ * Each exercise's own [Exercise.performanceHistory] can be read against
+ * [WorkoutSession.completedAt]'s date to show that session's per-exercise stats, since sessions
+ * don't otherwise keep their own snapshot of them.
+ */
+data class WorkoutSessionWithWorkout(
+    @Embedded
+    val session: WorkoutSession,
+    @Relation(
+        parentColumn = "workoutId",
+        entityColumn = "id",
+    )
+    val workout: Workout,
+    @Relation(
+        parentColumn = "workoutId",
+        entityColumn = "workoutId",
+    )
+    val exercises: List<Exercise>,
+)
