@@ -40,7 +40,7 @@ import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.performanceOn
-import java.time.LocalDate
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -204,12 +204,9 @@ private fun WorkoutSessionCard(
             }
             if (expanded) {
                 HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-                val sessionDate = remember(session.session.completedAt) {
-                    session.session.completedAt.atZone(ZoneId.systemDefault()).toLocalDate()
-                }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     session.exercises.forEach { exercise ->
-                        ExerciseStatsRow(exercise = exercise, sessionDate = sessionDate)
+                        ExerciseStatsRow(exercise = exercise, sessionCompletedAt = session.session.completedAt)
                     }
                 }
             }
@@ -220,10 +217,10 @@ private fun WorkoutSessionCard(
 @Composable
 private fun ExerciseStatsRow(
     exercise: Exercise,
-    sessionDate: LocalDate,
+    sessionCompletedAt: Instant,
     modifier: Modifier = Modifier,
 ) {
-    val entry = exercise.performanceOn(sessionDate)
+    val entry = exercise.performanceOn(sessionCompletedAt)
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,

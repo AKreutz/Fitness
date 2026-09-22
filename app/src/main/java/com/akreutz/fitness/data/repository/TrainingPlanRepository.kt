@@ -20,8 +20,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
 
 /**
  * Mediates reads/writes of [TrainingPlan]s (and their nested [Workout]s) against Room, and
@@ -49,11 +47,11 @@ class TrainingPlanRepository(
      * an older one could conflict with rating/weight changes a later session already made, so the
      * workouts screen only ever offers this for the latest one. Also undoes that session's effect
      * on each of its workout's exercises: the [Exercise.performanceHistory] entry it recorded
-     * (keyed by the date [session] completed on) is removed, and if a weight-increase offer was
-     * accepted for that exercise afterwards (see [setExerciseWeight]), its [Exercise.weightKg] is
-     * rolled back to the weight actually used in [session] — the removed entry's own
-     * [ExercisePerformanceEntry.weightKg], which is what the exercise was still at at the time of
-     * that offer.
+     * (keyed by [session]'s [WorkoutSession.completedAt]) is removed, and if a weight-increase
+     * offer was accepted for that exercise afterwards (see [setExerciseWeight]), its
+     * [Exercise.weightKg] is rolled back to the weight actually used in [session] — the removed
+     * entry's own [ExercisePerformanceEntry.weightKg], which is what the exercise was still at at
+     * the time of that offer.
      */
     suspend fun deleteWorkoutSession(session: WorkoutSession) {
         database.withTransaction {
@@ -61,15 +59,14 @@ class TrainingPlanRepository(
                 .firstOrNull()?.session
             if (mostRecent?.id != session.id) return@withTransaction
 
-            val sessionDate = session.completedAt.atZone(ZoneId.systemDefault()).toLocalDate()
             database.workoutSessionDao().delete(session)
             val exercises = database.exerciseDao().observeForWorkout(session.workoutId).first()
             exercises.forEach { exercise ->
-                val entry = exercise.performanceHistory[sessionDate] ?: return@forEach
+                val entry = exercise.performanceHistory[session.completedAt] ?: return@forEach
                 database.exerciseDao().update(
                     exercise.copy(
                         weightKg = entry.weightKg,
-                        performanceHistory = exercise.performanceHistory - sessionDate,
+                        performanceHistory = exercise.performanceHistory - session.completedAt,
                     ),
                 )
             }
@@ -177,27 +174,28 @@ class TrainingPlanRepository(
 
     /**
      * Records the user's perceived effort for each exercise in [entries] (exercise id to what to
-     * record), all under today's date, and logs a [WorkoutSession] for [workoutId] that began at
-     * [startedAt] and finishes now, as a single transaction. Used when a guided workout session
-     * finishes, to save the ratings collected along the way together with the session itself.
-     * [entries]' weights are passed in by the caller (the weight actually used at the time each
-     * exercise was rated) rather than read fresh from the database, so they aren't affected by a
-     * same-session weight increase (see [setExerciseWeight]) applied to an earlier-rated exercise
-     * afterwards.
+     * record), keyed under the session's completion instant, and logs a [WorkoutSession] for
+     * [workoutId] that began at [startedAt] and finishes now, as a single transaction. Used when a
+     * guided workout session finishes, to save the ratings collected along the way together with
+     * the session itself. [entries]' weights are passed in by the caller (the weight actually used
+     * at the time each exercise was rated) rather than read fresh from the database, so they
+     * aren't affected by a same-session weight increase (see [setExerciseWeight]) applied to an
+     * earlier-rated exercise afterwards. Keying by the exact completion instant (rather than just
+     * the date) means a second workout completed the same day gets its own entry instead of
+     * overwriting the first's.
      */
     suspend fun recordPerceivedEfforts(
         workoutId: Long,
         entries: Map<Long, ExercisePerformanceEntry>,
         startedAt: Instant,
     ) {
-        val today = LocalDate.now()
         val completedAt = Instant.now()
         database.withTransaction {
             entries.forEach { (exerciseId, entry) ->
                 val exercise = database.exerciseDao().getById(exerciseId) ?: return@forEach
                 database.exerciseDao().update(
                     exercise.copy(
-                        performanceHistory = exercise.performanceHistory + (today to entry),
+                        performanceHistory = exercise.performanceHistory + (completedAt to entry),
                     ),
                 )
             }

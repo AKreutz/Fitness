@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import java.time.LocalDate
+import java.time.Instant
 
 /**
  * A single exercise within a [Workout]: a name, its equipment [type], and the prescription
@@ -12,7 +12,7 @@ import java.time.LocalDate
  * `[8, 10, 12]`), chosen from a fixed list of options rather than typed freely. [weightKg] is
  * the starting weight, and [weightIncrementKg] is how much it should go up by between
  * progressions. [restSeconds] is how long to rest between working sets during a guided session.
- * [position] defines its order within the workout. [performanceHistory] records, per date
+ * [position] defines its order within the workout. [performanceHistory] records, per time
  * performed, the weight used and the perceived effort of that performance.
  */
 @Entity(
@@ -60,10 +60,10 @@ val Exercise.lastPerformanceAtCurrentWeight: ExercisePerformanceEntry?
         ?.takeIf { it.weightKg == weightKg }
 
 /**
- * This exercise's [ExercisePerformanceEntry] recorded on [date], or `null` if it wasn't performed
- * (or rated) that day. Used to show a past [com.akreutz.fitness.data.model.WorkoutSession]'s
- * per-exercise stats, since sessions don't keep their own snapshot of them; note this is
- * ambiguous if the same workout (and so the same exercise) was completed more than once on
- * [date], since [performanceHistory] only keeps one entry per day.
+ * This exercise's [ExercisePerformanceEntry] recorded for the [com.akreutz.fitness.data.model.
+ * WorkoutSession] that completed at [completedAt], or `null` if it wasn't performed (or rated) in
+ * that session. Used to show a past session's per-exercise stats, since sessions don't keep their
+ * own snapshot of them.
  */
-fun Exercise.performanceOn(date: LocalDate): ExercisePerformanceEntry? = performanceHistory[date]
+fun Exercise.performanceOn(completedAt: Instant): ExercisePerformanceEntry? =
+    performanceHistory[completedAt]

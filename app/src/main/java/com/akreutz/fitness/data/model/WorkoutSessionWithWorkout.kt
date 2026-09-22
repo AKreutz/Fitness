@@ -6,8 +6,8 @@ import androidx.room.Relation
 /**
  * A [WorkoutSession] together with the [Workout] it was for and that workout's [Exercise]s.
  * Each exercise's own [Exercise.performanceHistory] can be read against
- * [WorkoutSession.completedAt]'s date to show that session's per-exercise stats, since sessions
- * don't otherwise keep their own snapshot of them.
+ * [WorkoutSession.completedAt] to show that session's per-exercise stats, since sessions don't
+ * otherwise keep their own snapshot of them.
  */
 data class WorkoutSessionWithWorkout(
     @Embedded

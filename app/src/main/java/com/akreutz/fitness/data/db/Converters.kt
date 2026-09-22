@@ -6,6 +6,7 @@ import com.akreutz.fitness.data.model.ExercisePerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 /** Room type converters for column types it can't persist natively. */
 class Converters {
@@ -18,8 +19,8 @@ class Converters {
 
     @TypeConverter
     fun fromPerformanceHistory(value: ExercisePerformanceHistory): String =
-        value.entries.joinToString(";") { (date, entry) ->
-            "$date:${entry.weightKg}:${entry.perceivedEffort}"
+        value.entries.joinToString(";") { (completedAt, entry) ->
+            "${completedAt.toEpochMilli()}:${entry.weightKg}:${entry.perceivedEffort}"
         }
 
     @TypeConverter
@@ -28,12 +29,25 @@ class Converters {
             emptyMap()
         } else {
             value.split(";").associate { record ->
-                val (date, weightKg, effort) = record.split(":")
-                LocalDate.parse(date) to ExercisePerformanceEntry(
+                val (key, weightKg, effort) = record.split(":")
+                parsePerformanceKey(key) to ExercisePerformanceEntry(
                     weightKg = weightKg.toDouble(),
                     perceivedEffort = parsePerceivedEffort(effort),
                 )
             }
+        }
+
+    /**
+     * Parses a [performanceHistory][ExercisePerformanceHistory] entry's key, tolerating the
+     * `LocalDate` (e.g. `2026-09-22`) it was previously stored as (keyed by day, before it was
+     * changed to key by the exact moment performed) by treating it as midnight in the system
+     * timezone, so history recorded before that change still loads.
+     */
+    private fun parsePerformanceKey(value: String): Instant =
+        if (value.toLongOrNull() != null) {
+            Instant.ofEpochMilli(value.toLong())
+        } else {
+            LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant()
         }
 
     /**
