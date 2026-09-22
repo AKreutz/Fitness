@@ -11,17 +11,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.PerceivedEffort
+import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.performanceOn
 import java.time.LocalDate
@@ -51,10 +56,18 @@ private val sessionDateTimeFormatter: DateTimeFormatter
 /**
  * Lists every completed [com.akreutz.fitness.data.model.WorkoutSession], most recent first, each
  * as a card with the workout's name, when it was completed, and how long it took. Tapping a card
- * expands it in place to show that session's per-exercise stats.
+ * expands it in place to show that session's per-exercise stats. Only the most recent session
+ * (the first card) has a delete button, which asks for confirmation before calling
+ * [onDeleteSession] — deleting an older one could conflict with rating/weight changes a later
+ * session already made (see [com.akreutz.fitness.data.repository.TrainingPlanRepository.
+ * deleteWorkoutSession]).
  */
 @Composable
-fun WorkoutsScreen(uiState: WorkoutHistoryUiState, modifier: Modifier = Modifier) {
+fun WorkoutsScreen(
+    uiState: WorkoutHistoryUiState,
+    onDeleteSession: (WorkoutSession) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     when (uiState) {
         is WorkoutHistoryUiState.Loading -> {
             Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -71,21 +84,60 @@ fun WorkoutsScreen(uiState: WorkoutHistoryUiState, modifier: Modifier = Modifier
             }
         }
         is WorkoutHistoryUiState.Loaded -> {
+            var sessionPendingDelete by remember { mutableStateOf<WorkoutSessionWithWorkout?>(null) }
+
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(uiState.sessions, key = { it.session.id }) { session ->
-                    WorkoutSessionCard(session = session)
+                itemsIndexed(uiState.sessions, key = { _, it -> it.session.id }) { index, session ->
+                    WorkoutSessionCard(
+                        session = session,
+                        onDeleteRequest = { sessionPendingDelete = session }
+                            .takeIf { index == 0 },
+                    )
                 }
+            }
+
+            val deleteTarget = sessionPendingDelete
+            if (deleteTarget != null) {
+                AlertDialog(
+                    onDismissRequest = { sessionPendingDelete = null },
+                    title = { Text("Delete workout") },
+                    text = {
+                        Text(
+                            "Delete this completed \"${deleteTarget.workout.name}\" session? " +
+                                "This can't be undone.",
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                onDeleteSession(deleteTarget.session)
+                                sessionPendingDelete = null
+                            },
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { sessionPendingDelete = null }) {
+                            Text("Cancel")
+                        }
+                    },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun WorkoutSessionCard(session: WorkoutSessionWithWorkout, modifier: Modifier = Modifier) {
+private fun WorkoutSessionCard(
+    session: WorkoutSessionWithWorkout,
+    onDeleteRequest: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     var expanded by rememberSaveable(session.session.id) { mutableStateOf(false) }
 
     Card(
@@ -112,11 +164,22 @@ private fun WorkoutSessionCard(session: WorkoutSessionWithWorkout, modifier: Mod
                     text = session.workout.name,
                     style = MaterialTheme.typography.titleMedium,
                 )
-                Icon(
-                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onDeleteRequest != null) {
+                        IconButton(onClick = onDeleteRequest) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "Delete \"${session.workout.name}\" session",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

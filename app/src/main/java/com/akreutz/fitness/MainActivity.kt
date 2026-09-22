@@ -234,6 +234,7 @@ private fun HomeScreen(
                 val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
                 WorkoutsScreen(
                     uiState = workoutHistory,
+                    onDeleteSession = workoutsViewModel::deleteWorkoutSession,
                     modifier = Modifier.padding(innerPadding),
                 )
             }

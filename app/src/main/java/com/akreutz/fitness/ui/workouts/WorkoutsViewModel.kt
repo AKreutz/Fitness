@@ -4,12 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /** Whether the completed-workout history is still loading, empty, or loaded. */
 sealed interface WorkoutHistoryUiState {
@@ -18,7 +20,7 @@ sealed interface WorkoutHistoryUiState {
     data class Loaded(val sessions: List<WorkoutSessionWithWorkout>) : WorkoutHistoryUiState
 }
 
-class WorkoutsViewModel(repository: TrainingPlanRepository) : ViewModel() {
+class WorkoutsViewModel(private val repository: TrainingPlanRepository) : ViewModel() {
 
     val workoutHistory: StateFlow<WorkoutHistoryUiState> = repository.observeWorkoutSessions()
         .map { sessions ->
@@ -33,6 +35,13 @@ class WorkoutsViewModel(repository: TrainingPlanRepository) : ViewModel() {
             started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
             initialValue = WorkoutHistoryUiState.Loading,
         )
+
+    /** Deletes [session] from the completed-workout history. */
+    fun deleteWorkoutSession(session: WorkoutSession) {
+        viewModelScope.launch {
+            repository.deleteWorkoutSession(session)
+        }
+    }
 }
 
 class WorkoutsViewModelFactory(

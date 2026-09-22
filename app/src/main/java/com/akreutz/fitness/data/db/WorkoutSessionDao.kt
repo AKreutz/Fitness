@@ -1,6 +1,7 @@
 package com.akreutz.fitness.data.db
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
@@ -13,7 +14,24 @@ interface WorkoutSessionDao {
     @Insert
     suspend fun insert(session: WorkoutSession): Long
 
+    @Delete
+    suspend fun delete(session: WorkoutSession)
+
     @Transaction
     @Query("SELECT * FROM workout_sessions ORDER BY completedAt DESC")
     fun observeAllMostRecentFirst(): Flow<List<WorkoutSessionWithWorkout>>
+
+    /**
+     * The [WorkoutSession.workoutId] of the most recently completed session logged against any
+     * workout in [trainingPlanId], or `null` if none has been completed yet (or they've all since
+     * been deleted). Used to derive which workout to offer next, so deleting a session is
+     * reflected immediately rather than needing separate bookkeeping.
+     */
+    @Query(
+        "SELECT workout_sessions.workoutId FROM workout_sessions " +
+            "JOIN workouts ON workouts.id = workout_sessions.workoutId " +
+            "WHERE workouts.trainingPlanId = :trainingPlanId " +
+            "ORDER BY workout_sessions.completedAt DESC LIMIT 1",
+    )
+    fun observeLastFinishedWorkoutId(trainingPlanId: Long): Flow<Long?>
 }

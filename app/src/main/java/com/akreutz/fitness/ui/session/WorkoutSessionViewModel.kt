@@ -304,16 +304,15 @@ class WorkoutSessionViewModel(
      * Moves on from a just-rated exercise (and any weight-increase offer that followed): to the
      * next exercise, or, if that was the workout's last exercise, persists every rating collected
      * this session together with a log of the session itself (see
-     * [TrainingPlanRepository.recordPerceivedEfforts]), records this workout as the most recently
-     * *finished* one (so [TrainingPlanRepository.nextWorkout] advances the rotation only now, not
-     * when the workout was merely started), and finishes.
+     * [TrainingPlanRepository.recordPerceivedEfforts] — logging it is also what marks this workout
+     * as the most recently *finished* one, so [TrainingPlanRepository.nextWorkout] advances the
+     * rotation only now, not when the workout was merely started), and finishes.
      */
     private fun proceedAfterRating() {
         val isLastExercise = exerciseIndex.value >= (latestExercises?.lastIndex ?: -1)
         if (isLastExercise) {
             viewModelScope.launch {
                 repository.recordPerceivedEfforts(workoutId, collectedRatings, startedAt)
-                repository.setLastFinishedWorkout(workoutId)
                 readyToFinish.value = true
             }
         } else {

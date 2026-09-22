@@ -14,7 +14,6 @@ import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.prefs.ActivePlanPreferences
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -22,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Mediates reads/writes of [TrainingPlan]s (and their nested [Workout]s) against Room, and
@@ -42,6 +42,39 @@ class TrainingPlanRepository(
     /** Every completed [WorkoutSession], each with the [Workout] it was for, most recent first. */
     fun observeWorkoutSessions(): Flow<List<WorkoutSessionWithWorkout>> =
         database.workoutSessionDao().observeAllMostRecentFirst()
+
+    /**
+     * Deletes [session] from the completed-workout history, as a single transaction, but only if
+     * it's still the *most recently completed* session overall (across every workout) — undoing
+     * an older one could conflict with rating/weight changes a later session already made, so the
+     * workouts screen only ever offers this for the latest one. Also undoes that session's effect
+     * on each of its workout's exercises: the [Exercise.performanceHistory] entry it recorded
+     * (keyed by the date [session] completed on) is removed, and if a weight-increase offer was
+     * accepted for that exercise afterwards (see [setExerciseWeight]), its [Exercise.weightKg] is
+     * rolled back to the weight actually used in [session] — the removed entry's own
+     * [ExercisePerformanceEntry.weightKg], which is what the exercise was still at at the time of
+     * that offer.
+     */
+    suspend fun deleteWorkoutSession(session: WorkoutSession) {
+        database.withTransaction {
+            val mostRecent = database.workoutSessionDao().observeAllMostRecentFirst().first()
+                .firstOrNull()?.session
+            if (mostRecent?.id != session.id) return@withTransaction
+
+            val sessionDate = session.completedAt.atZone(ZoneId.systemDefault()).toLocalDate()
+            database.workoutSessionDao().delete(session)
+            val exercises = database.exerciseDao().observeForWorkout(session.workoutId).first()
+            exercises.forEach { exercise ->
+                val entry = exercise.performanceHistory[sessionDate] ?: return@forEach
+                database.exerciseDao().update(
+                    exercise.copy(
+                        weightKg = entry.weightKg,
+                        performanceHistory = exercise.performanceHistory - sessionDate,
+                    ),
+                )
+            }
+        }
+    }
 
     /** The plan the user is currently associated with, or `null` if none has been created yet. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -98,11 +131,15 @@ class TrainingPlanRepository(
      * The [Workout] to offer starting next for [trainingPlan]: the one after whichever was
      * finished last (by plan order), wrapping back to the first; or simply the first workout if
      * none has been finished yet, or the plan has no workouts. Starting a workout without
-     * finishing it (e.g. cancelling) doesn't advance this, so it keeps being offered.
+     * finishing it (e.g. cancelling) doesn't advance this, so it keeps being offered. "Finished
+     * last" is read straight from the logged [WorkoutSession]s rather than separately tracked
+     * state, so deleting the most recent one (see [deleteWorkoutSession]) is reflected here too.
      */
     suspend fun nextWorkout(trainingPlan: TrainingPlanWithWorkouts): Workout? {
         val workouts = trainingPlan.workouts.map { it.workout }
-        val lastFinishedId = activePlanPreferences.lastFinishedWorkoutId.first()
+        val lastFinishedId = database.workoutSessionDao()
+            .observeLastFinishedWorkoutId(trainingPlan.trainingPlan.id)
+            .first()
         return workouts.getOrNull(nextWorkoutIndex(workouts, lastFinishedId))
     }
 
@@ -111,12 +148,16 @@ class TrainingPlanRepository(
      * exercises) reordered so the one up next comes first, keeping the rest in their predefined
      * order, whenever [trainingPlan] or the last-finished workout changes.
      */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun observeWorkoutsNextFirst(
         trainingPlan: Flow<TrainingPlanWithWorkouts>,
     ): Flow<List<WorkoutWithExercises>> =
-        combine(trainingPlan, activePlanPreferences.lastFinishedWorkoutId) { plan, lastFinishedId ->
-            val nextIndex = nextWorkoutIndex(plan.workouts.map { it.workout }, lastFinishedId)
-            if (nextIndex <= 0) plan.workouts else plan.workouts.rotated(nextIndex)
+        trainingPlan.flatMapLatest { plan ->
+            database.workoutSessionDao().observeLastFinishedWorkoutId(plan.trainingPlan.id)
+                .map { lastFinishedId ->
+                    val nextIndex = nextWorkoutIndex(plan.workouts.map { it.workout }, lastFinishedId)
+                    if (nextIndex <= 0) plan.workouts else plan.workouts.rotated(nextIndex)
+                }
         }
 
     /**
@@ -133,11 +174,6 @@ class TrainingPlanRepository(
 
     private fun <T> List<T>.rotated(startIndex: Int): List<T> =
         subList(startIndex, size) + subList(0, startIndex)
-
-    /** Records [workoutId] as the most recently finished workout, for [nextWorkout] rotation. */
-    suspend fun setLastFinishedWorkout(workoutId: Long) {
-        activePlanPreferences.setLastFinishedWorkoutId(workoutId)
-    }
 
     /**
      * Records the user's perceived effort for each exercise in [entries] (exercise id to what to
