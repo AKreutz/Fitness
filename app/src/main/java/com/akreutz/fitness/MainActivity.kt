@@ -58,6 +58,9 @@ import com.akreutz.fitness.ui.profile.ProfileViewModel
 import com.akreutz.fitness.ui.profile.ProfileViewModelFactory
 import com.akreutz.fitness.ui.session.WorkoutSessionScreen
 import com.akreutz.fitness.ui.theme.FitnessTheme
+import com.akreutz.fitness.ui.workouts.WorkoutsDeleteLastButton
+import com.akreutz.fitness.ui.workouts.WorkoutsDeleteLastConfirmationDialog
+import com.akreutz.fitness.ui.workouts.WorkoutHistoryUiState
 import com.akreutz.fitness.ui.workouts.WorkoutsScreen
 import com.akreutz.fitness.ui.workouts.WorkoutsViewModel
 import com.akreutz.fitness.ui.workouts.WorkoutsViewModelFactory
@@ -189,6 +192,7 @@ private fun HomeScreen(
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
     var showCreatePlan by rememberSaveable { mutableStateOf(false) }
+    var deleteLastWorkoutPending by rememberSaveable { mutableStateOf(false) }
     val workoutsViewModel: WorkoutsViewModel = viewModel(
         factory = WorkoutsViewModelFactory(trainingPlanRepository),
     )
@@ -201,6 +205,15 @@ private fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = { Text(destinations[selectedDestination].label) },
+                actions = {
+                    if (selectedDestination == 1) {
+                        val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
+                        WorkoutsDeleteLastButton(
+                            uiState = workoutHistory,
+                            onClick = { deleteLastWorkoutPending = true },
+                        )
+                    }
+                },
             )
         },
         bottomBar = {
@@ -234,9 +247,20 @@ private fun HomeScreen(
                 val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
                 WorkoutsScreen(
                     uiState = workoutHistory,
-                    onDeleteSession = workoutsViewModel::deleteWorkoutSession,
                     modifier = Modifier.padding(innerPadding),
                 )
+                val deleteTarget = (workoutHistory as? WorkoutHistoryUiState.Loaded)
+                    ?.sessions?.firstOrNull()
+                if (deleteLastWorkoutPending && deleteTarget != null) {
+                    WorkoutsDeleteLastConfirmationDialog(
+                        session = deleteTarget,
+                        onConfirm = { session ->
+                            workoutsViewModel.deleteWorkoutSession(session)
+                            deleteLastWorkoutPending = false
+                        },
+                        onDismiss = { deleteLastWorkoutPending = false },
+                    )
+                }
             }
             3 -> {
                 if (showCreatePlan) {

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
@@ -22,7 +21,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,16 +54,14 @@ private val sessionDateTimeFormatter: DateTimeFormatter
 /**
  * Lists every completed [com.akreutz.fitness.data.model.WorkoutSession], most recent first, each
  * as a card with the workout's name, when it was completed, and how long it took. Tapping a card
- * expands it in place to show that session's per-exercise stats. Only the most recent session
- * (the first card) has a delete button, which asks for confirmation before calling
- * [onDeleteSession] — deleting an older one could conflict with rating/weight changes a later
- * session already made (see [com.akreutz.fitness.data.repository.TrainingPlanRepository.
- * deleteWorkoutSession]).
+ * expands it in place to show that session's per-exercise stats.
+ *
+ * Deleting the most recent session is offered elsewhere (in the screen's header, since this list
+ * can grow long) — see [WorkoutsDeleteLastButton] and [WorkoutsDeleteLastConfirmationDialog].
  */
 @Composable
 fun WorkoutsScreen(
     uiState: WorkoutHistoryUiState,
-    onDeleteSession: (WorkoutSession) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when (uiState) {
@@ -84,58 +80,70 @@ fun WorkoutsScreen(
             }
         }
         is WorkoutHistoryUiState.Loaded -> {
-            var sessionPendingDelete by remember { mutableStateOf<WorkoutSessionWithWorkout?>(null) }
-
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                itemsIndexed(uiState.sessions, key = { _, it -> it.session.id }) { index, session ->
-                    WorkoutSessionCard(
-                        session = session,
-                        onDeleteRequest = { sessionPendingDelete = session }
-                            .takeIf { index == 0 },
-                    )
+                itemsIndexed(uiState.sessions, key = { _, it -> it.session.id }) { _, session ->
+                    WorkoutSessionCard(session = session)
                 }
-            }
-
-            val deleteTarget = sessionPendingDelete
-            if (deleteTarget != null) {
-                AlertDialog(
-                    onDismissRequest = { sessionPendingDelete = null },
-                    title = { Text("Delete workout") },
-                    text = {
-                        Text(
-                            "Delete this completed \"${deleteTarget.workout.name}\" session? " +
-                                "This can't be undone.",
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                onDeleteSession(deleteTarget.session)
-                                sessionPendingDelete = null
-                            },
-                        ) {
-                            Text("Delete")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { sessionPendingDelete = null }) {
-                            Text("Cancel")
-                        }
-                    },
-                )
             }
         }
     }
 }
 
+/**
+ * A "Delete last workout" button meant for the screen header, enabled only when there is a
+ * completed session to delete.
+ */
+@Composable
+fun WorkoutsDeleteLastButton(
+    uiState: WorkoutHistoryUiState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hasSessions = uiState is WorkoutHistoryUiState.Loaded && uiState.sessions.isNotEmpty()
+    TextButton(onClick = onClick, enabled = hasSessions, modifier = modifier) {
+        Text("Delete last workout")
+    }
+}
+
+/**
+ * Confirmation dialog for deleting the most recent completed session — deleting an older one
+ * could conflict with rating/weight changes a later session already made (see
+ * [com.akreutz.fitness.data.repository.TrainingPlanRepository.deleteWorkoutSession]).
+ */
+@Composable
+fun WorkoutsDeleteLastConfirmationDialog(
+    session: WorkoutSessionWithWorkout,
+    onConfirm: (WorkoutSession) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete workout") },
+        text = {
+            Text(
+                "Delete the last completed \"${session.workout.name}\" session? This can't be undone.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(session.session) }) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
 @Composable
 private fun WorkoutSessionCard(
     session: WorkoutSessionWithWorkout,
-    onDeleteRequest: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable(session.session.id) { mutableStateOf(false) }
@@ -165,15 +173,6 @@ private fun WorkoutSessionCard(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onDeleteRequest != null) {
-                        IconButton(onClick = onDeleteRequest) {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = "Delete \"${session.workout.name}\" session",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
                     Icon(
                         imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                         contentDescription = if (expanded) "Collapse" else "Expand",
