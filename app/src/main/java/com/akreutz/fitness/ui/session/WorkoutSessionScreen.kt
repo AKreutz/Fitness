@@ -70,6 +70,7 @@ import com.akreutz.fitness.ui.theme.PlateGreen10
 import com.akreutz.fitness.ui.theme.PlateWhite5
 import com.akreutz.fitness.ui.theme.PlateYellow15
 import java.util.Locale
+import kotlin.math.pow
 
 /**
  * The screen shown while a workout is in progress: guides the user through [workoutId]'s
@@ -657,72 +658,108 @@ private fun onPlateColor(plateKg: Double): Color = when (plateKg) {
  * A visual breakdown of the barbell plates needed per side to reach [weightKg]: a side-on view
  * of the bar's sleeve and collar with each plate drawn as a color-coded disc seen edge-on, sized
  * by weight, labeled with its weight, and stacked in loading order — largest first, closest to
- * the collar. Shows nothing if [weightKg] can't be made up exactly from
- * [PlateBreakdown.PLATE_SIZES_KG].
+ * the collar. Shows the empty bar (no plates) at exactly [PlateBreakdown.BAR_WEIGHT_KG], and
+ * nothing if [weightKg] can't be made up exactly from [PlateBreakdown.PLATE_SIZES_KG].
  */
 @Composable
 private fun PlateBreakdownRow(weightKg: Double, modifier: Modifier = Modifier) {
     val plates = PlateBreakdown.forWeight(weightKg)
-    if (plates.isEmpty()) return
+    if (plates.isEmpty() && weightKg != PlateBreakdown.BAR_WEIGHT_KG) return
 
     BarbellSideView(plates = plates, modifier = modifier)
 }
 
 /**
  * Draws the bar's sleeve as a horizontal rod with [plates] slid onto it left to right (largest
- * first, as they'd be loaded closest to the collar), each plate a color-coded disc seen edge-on —
- * taller and thicker the heavier it is — with its weight labeled in the middle.
+ * first, as they'd be loaded closest to the collar), each plate a color-coded disc seen edge-on.
+ * The 20/15/10kg plates share one height and are distinguished only by thickness, proportional
+ * to weight relative to the 10kg plate; 5kg keeps 10kg's thickness at a shorter height, and
+ * 2.5kg/1.25kg share a shorter height still, with 1.25kg half as thick as 2.5kg. Each plate's
+ * weight is labeled in the middle, rotated to fit along its height.
  */
 @Composable
 private fun BarbellSideView(plates: List<Double>, modifier: Modifier = Modifier) {
-    val plateHeight = 64.dp
+    val tallPlateHeight = 92.dp
+    val basePlateWidth = 14.dp // thickness of the 10kg plate; 20/15kg scale up from this
     val sleeveHeight = 12.dp
+    val rodHeight = 8.dp // the bare bar is thinner than the sleeve it slides into, as on a real barbell
     val sleeveColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    // Every child (sleeve stub, plates) is drawn against the same plateHeight, so all discs sit
-    // on a shared centerline regardless of their own height.
+    // Every child (sleeve stub, plates) is drawn against the same tallPlateHeight, so all discs
+    // sit on a shared centerline regardless of their own height.
     Row(
         horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.Top,
-        modifier = modifier.height(plateHeight),
+        modifier = modifier.height(tallPlateHeight),
     ) {
         // Short stub of exposed sleeve before the first plate, as on a real bar.
-        Canvas(modifier = Modifier.width(12.dp).height(plateHeight)) {
-            drawRect(
+        BarRodSegment(
+            width = 12.dp,
+            rodHeight = sleeveHeight,
+            color = sleeveColor,
+            tallPlateHeight = tallPlateHeight,
+        )
+        if (plates.isEmpty()) {
+            // No plates loaded (bar weight only): extend a bare length of rod past the sleeve
+            // stub instead of leaving the bar looking cut off.
+            BarRodSegment(
+                width = 64.dp,
+                rodHeight = rodHeight,
                 color = sleeveColor,
-                topLeft = Offset(0f, (size.height - sleeveHeight.toPx()) / 2f),
-                size = Size(size.width, sleeveHeight.toPx()),
+                tallPlateHeight = tallPlateHeight,
             )
         }
         for (plateKg in plates) {
             PlateDisc(
                 plateKg = plateKg,
-                plateHeight = plateHeight,
+                tallPlateHeight = tallPlateHeight,
+                basePlateWidth = basePlateWidth,
                 color = plateColor(plateKg),
                 labelColor = onPlateColor(plateKg),
+            )
+        }
+        if (plates.isNotEmpty()) {
+            // Short length of bare rod past the outermost plate, where the collar clamps it in
+            // place on a real bar.
+            BarRodSegment(
+                width = 16.dp,
+                rodHeight = rodHeight,
+                color = sleeveColor,
+                tallPlateHeight = tallPlateHeight,
             )
         }
     }
 }
 
+/** A horizontal segment of the bar rod, [rodHeight] thick, centered within [tallPlateHeight]. */
+@Composable
+private fun BarRodSegment(width: Dp, rodHeight: Dp, color: Color, tallPlateHeight: Dp) {
+    Canvas(modifier = Modifier.width(width).height(tallPlateHeight)) {
+        drawRect(
+            color = color,
+            topLeft = Offset(0f, (size.height - rodHeight.toPx()) / 2f),
+            size = Size(size.width, rodHeight.toPx()),
+        )
+    }
+}
+
 /**
- * One plate: a color-coded disc seen edge-on, sized by [plateKg] relative to the heaviest
- * available size, centered within [plateHeight], with its weight labeled in the middle of the
- * disc, rotated 90° to the left to fit along the plate's long (vertical) axis. The smallest
- * (1.25kg) plate is drawn unlabeled, at the same height as the 2.5kg plate but half its
- * thickness — too thin to fit a label.
+ * One plate: a color-coded disc seen edge-on, sized by [plateKg]'s stepped height/thickness tier
+ * (see [plateDiscSize]), vertically centered within [tallPlateHeight] so every plate shares the
+ * bar's centerline, with its weight labeled in the middle of the disc, rotated 90° to the left to
+ * fit along the plate's long (vertical) axis. The smallest (1.25kg) plate is drawn unlabeled —
+ * too thin to fit a label.
  */
 @Composable
 private fun PlateDisc(
     plateKg: Double,
-    plateHeight: Dp,
+    tallPlateHeight: Dp,
+    basePlateWidth: Dp,
     color: Color,
     labelColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val width = plateWidth(plateKg)
-    val heightFraction = plateHeightFraction(plateKg)
+    val (width, discHeight) = plateDiscSize(plateKg, tallPlateHeight, basePlateWidth)
     val isSmallestPlate = plateKg == PlateBreakdown.PLATE_SIZES_KG.last()
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = labelColor)
@@ -731,9 +768,9 @@ private fun PlateDisc(
     Canvas(
         modifier = modifier
             .width(width)
-            .height(plateHeight),
+            .height(tallPlateHeight),
     ) {
-        val plateSize = Size(width = size.width, height = size.height * heightFraction)
+        val plateSize = Size(width = size.width, height = discHeight.toPx())
         val topLeft = Offset(x = 0f, y = (size.height - plateSize.height) / 2f)
         val corner = CornerRadius(x = plateSize.width * 0.25f, y = plateSize.width * 0.25f)
         drawRoundRect(color = color, topLeft = topLeft, size = plateSize, cornerRadius = corner)
@@ -771,31 +808,29 @@ private fun formatPlateWeight(plateKg: Double): String =
     }
 
 /**
- * How wide (thick) a plate is drawn, scaled by [plateKg] relative to the heaviest plate size.
- * The 1.25kg plate is the exception: it's drawn at half the width of the 2.5kg plate rather than
- * scaled from its own weight, since scaling it normally would make it too thin to read.
+ * Blends a real height ratio (e.g. 0.5, 0.25 relative to [tallPlateHeight]) toward 1 by
+ * [HEIGHT_COMPRESSION], so shorter tiers read as closer in size to the tall tier rather than
+ * their full real-world height difference, which would otherwise make the smallest plates look
+ * disproportionately tiny next to a 92.dp-tall 20kg plate.
  */
-private fun plateWidth(plateKg: Double): Dp {
-    val maxWidth = 22.dp
-    val minWidth = 10.dp
-    val maxPlateKg = PlateBreakdown.PLATE_SIZES_KG.first()
-    if (plateKg == 1.25) return plateWidth(2.5) / 2
-    val fraction = (plateKg / maxPlateKg).toFloat().coerceIn(0f, 1f)
-    return minWidth + (maxWidth - minWidth) * fraction
-}
+private const val HEIGHT_COMPRESSION = 0.65
+
+private fun compressedHeightRatio(realRatio: Double): Double =
+    realRatio.pow(HEIGHT_COMPRESSION)
 
 /**
- * How tall a plate is drawn, as a fraction of the row's full height, scaled by [plateKg]. The
- * 1.25kg plate is the exception: it's drawn at the same height as the 2.5kg plate rather than
- * scaled from its own (smaller) weight.
+ * The (width, height) a plate of [plateKg] is drawn at. The 20/15/10kg plates share
+ * [tallPlateHeight] and differ only in thickness, scaled linearly by weight relative to the
+ * 10kg plate's [basePlateWidth]. 5kg keeps 10kg's thickness at a shorter, compressed height;
+ * 2.5kg and 1.25kg share a shorter height still, with 1.25kg half as thick as 2.5kg.
  */
-private fun plateHeightFraction(plateKg: Double): Float {
-    val minFraction = 0.55f
-    val maxPlateKg = PlateBreakdown.PLATE_SIZES_KG.first()
-    val effectiveKg = if (plateKg == 1.25) 2.5 else plateKg
-    val fraction = (effectiveKg / maxPlateKg).toFloat().coerceIn(0f, 1f)
-    return minFraction + (1f - minFraction) * fraction
-}
+private fun plateDiscSize(plateKg: Double, tallPlateHeight: Dp, basePlateWidth: Dp): Pair<Dp, Dp> =
+    when {
+        plateKg >= 10.0 -> basePlateWidth * (plateKg / 10.0).toFloat() to tallPlateHeight
+        plateKg == 5.0 -> basePlateWidth to tallPlateHeight * compressedHeightRatio(0.5).toFloat()
+        plateKg == 2.5 -> basePlateWidth to tallPlateHeight * compressedHeightRatio(0.25).toFloat()
+        else -> basePlateWidth / 2 to tallPlateHeight * compressedHeightRatio(0.25).toFloat() // 1.25kg
+    }
 
 /** The label shown for a [SetProgress] on the exercise card, e.g. "Warm-up" or "Set 2 of 3". */
 private val SetProgress.label: String
