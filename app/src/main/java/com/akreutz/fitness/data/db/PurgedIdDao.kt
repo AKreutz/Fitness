@@ -3,6 +3,7 @@ package com.akreutz.fitness.data.db
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
+import androidx.room.Query
 import com.akreutz.fitness.data.model.PurgedId
 
 @Dao
@@ -14,4 +15,7 @@ interface PurgedIdDao {
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(purgedIds: List<PurgedId>)
+
+    @Query("SELECT * FROM purged_ids")
+    suspend fun getAll(): List<PurgedId>
 }

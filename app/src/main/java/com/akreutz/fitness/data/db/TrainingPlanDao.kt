@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import kotlinx.coroutines.flow.Flow
@@ -28,4 +29,11 @@ interface TrainingPlanDao {
     @Transaction
     @Query("SELECT * FROM training_plans ORDER BY name")
     fun observeAll(): Flow<List<TrainingPlanWithWorkouts>>
+
+    @Query("SELECT * FROM training_plans")
+    suspend fun getAll(): List<TrainingPlan>
+
+    /** Inserts or updates each of [trainingPlans] by id. Used to write a synced merge back. */
+    @Upsert
+    suspend fun upsertAll(trainingPlans: List<TrainingPlan>)
 }

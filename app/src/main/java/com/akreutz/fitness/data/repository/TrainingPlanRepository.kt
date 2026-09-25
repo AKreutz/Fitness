@@ -17,6 +17,7 @@ import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.prefs.ActivePlanPreferences
 import com.akreutz.fitness.data.seed.PreloadedTrainingPlan
 import com.akreutz.fitness.data.seed.PreloadedTrainingPlans
+import com.akreutz.fitness.data.sync.LocalChangeTracker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -28,11 +29,13 @@ import java.time.ZoneId
 
 /**
  * Mediates reads/writes of [TrainingPlan]s (and their nested [Workout]s) against Room, and
- * tracks which one the user is currently associated with.
+ * tracks which one the user is currently associated with. Every write marks [localChangeTracker]
+ * dirty, for the sync layer to know local data has changed since the last sync.
  */
 class TrainingPlanRepository(
     private val database: FitnessDatabase,
     private val activePlanPreferences: ActivePlanPreferences,
+    private val localChangeTracker: LocalChangeTracker,
 ) {
 
     fun observeTrainingPlans(): Flow<List<TrainingPlanWithWorkouts>> =
@@ -79,6 +82,7 @@ class TrainingPlanRepository(
             }
             database.purgedIdDao().insert(purgedRecordIds)
         }
+        localChangeTracker.markDirty()
     }
 
     /** The plan the user is currently associated with, or `null` if none has been created yet. */
@@ -127,6 +131,7 @@ class TrainingPlanRepository(
                 }
             }
         }
+        localChangeTracker.markDirty()
         activePlanPreferences.setActiveTrainingPlanId(trainingPlan.id)
         return trainingPlan.id
     }
@@ -145,10 +150,10 @@ class TrainingPlanRepository(
      * plans screen.
      */
     suspend fun createPreloadedTrainingPlanIfMissing(plan: PreloadedTrainingPlan) {
-        database.withTransaction {
+        val inserted = database.withTransaction {
             val alreadyExists = database.trainingPlanDao().observeAll().first()
                 .any { it.trainingPlan.isPreloaded && it.trainingPlan.name == plan.name }
-            if (alreadyExists) return@withTransaction
+            if (alreadyExists) return@withTransaction false
 
             val trainingPlan = TrainingPlan(name = plan.name, isPreloaded = true)
             database.trainingPlanDao().insert(trainingPlan)
@@ -207,7 +212,9 @@ class TrainingPlanRepository(
                     }
                 }
             }
+            true
         }
+        if (inserted) localChangeTracker.markDirty()
     }
 
     /**
@@ -296,6 +303,7 @@ class TrainingPlanRepository(
                 ),
             )
         }
+        localChangeTracker.markDirty()
     }
 
     /**
@@ -311,6 +319,7 @@ class TrainingPlanRepository(
     suspend fun setExerciseWeight(exerciseId: String, weightKg: Double) {
         val exercise = database.exerciseDao().getById(exerciseId) ?: return
         database.exerciseDao().update(exercise.copy(weightKg = weightKg, updatedAt = Instant.now()))
+        localChangeTracker.markDirty()
     }
 
     /** Switches the plan the user is currently associated with to the one with [id]. */
@@ -333,6 +342,7 @@ class TrainingPlanRepository(
             database.purgedIdDao().insert(listOf(PurgedId(id = trainingPlan.id)))
             database.trainingPlanDao().delete(trainingPlan)
         }
+        localChangeTracker.markDirty()
         if (wasActive) {
             activePlanPreferences.clearActiveTrainingPlanId()
         }
@@ -391,11 +401,13 @@ class TrainingPlanRepository(
                 ),
             )
         }
+        localChangeTracker.markDirty()
     }
 
     /** Renames [workout] to [name]. Used from the plan editor. */
     suspend fun renameWorkout(workout: Workout, name: String) {
         database.workoutDao().update(workout.copy(name = name, updatedAt = Instant.now()))
+        localChangeTracker.markDirty()
     }
 
     /**
@@ -409,6 +421,7 @@ class TrainingPlanRepository(
                 database.workoutDao().insert(it)
             }
         }
+        localChangeTracker.markDirty()
         return workout.id
     }
 
@@ -431,6 +444,7 @@ class TrainingPlanRepository(
                 },
             )
         }
+        localChangeTracker.markDirty()
     }
 
     /**
@@ -448,6 +462,7 @@ class TrainingPlanRepository(
                 },
             )
         }
+        localChangeTracker.markDirty()
     }
 
     /** Updates every field of [exercise]. Used from the plan editor. */
@@ -473,6 +488,7 @@ class TrainingPlanRepository(
                 updatedAt = Instant.now(),
             ),
         )
+        localChangeTracker.markDirty()
     }
 
     /**
@@ -495,6 +511,7 @@ class TrainingPlanRepository(
                 },
             )
         }
+        localChangeTracker.markDirty()
     }
 
     /**
@@ -513,5 +530,6 @@ class TrainingPlanRepository(
                 },
             )
         }
+        localChangeTracker.markDirty()
     }
 }

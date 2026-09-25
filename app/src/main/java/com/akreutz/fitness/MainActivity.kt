@@ -1,9 +1,11 @@
 package com.akreutz.fitness
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,10 +19,14 @@ import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -40,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -64,8 +71,19 @@ import com.akreutz.fitness.ui.workouts.WorkoutHistoryUiState
 import com.akreutz.fitness.ui.workouts.WorkoutsScreen
 import com.akreutz.fitness.ui.workouts.WorkoutsViewModel
 import com.akreutz.fitness.ui.workouts.WorkoutsViewModelFactory
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private var pendingConsentResult: CompletableDeferred<Boolean>? = null
+
+    private val consentResultLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        pendingConsentResult?.complete(result.resultCode == Activity.RESULT_OK)
+        pendingConsentResult = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -76,6 +94,18 @@ class MainActivity : ComponentActivity() {
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
+        }
+
+        val app = applicationContext as FitnessApplication
+        app.authManager.consentLauncher = { intent, result ->
+            pendingConsentResult = result
+            consentResultLauncher.launch(intent)
+        }
+        lifecycleScope.launch {
+            if (app.authManager.signedInAccount == null) {
+                app.authManager.signIn()
+            }
+            app.syncInBackground()
         }
 
         setContent {
@@ -100,6 +130,7 @@ class MainActivity : ComponentActivity() {
                         trainingPlan = state,
                         homeViewModel = homeViewModel,
                         trainingPlanRepository = application.trainingPlanRepository,
+                        application = application,
                     )
                 }
             }
@@ -138,6 +169,7 @@ fun FitnessApp(
     trainingPlan: ActiveTrainingPlanUiState.Loaded,
     homeViewModel: HomeViewModel,
     trainingPlanRepository: TrainingPlanRepository,
+    application: FitnessApplication,
 ) {
     val navController = rememberNavController()
 
@@ -152,6 +184,7 @@ fun FitnessApp(
                 trainingPlan = trainingPlan,
                 homeViewModel = homeViewModel,
                 trainingPlanRepository = trainingPlanRepository,
+                application = application,
                 onEditPlan = { trainingPlanId -> navController.navigate("plan-editor/$trainingPlanId") },
             )
         }
@@ -188,6 +221,7 @@ private fun HomeScreen(
     trainingPlan: ActiveTrainingPlanUiState.Loaded,
     homeViewModel: HomeViewModel,
     trainingPlanRepository: TrainingPlanRepository,
+    application: FitnessApplication,
     onEditPlan: (trainingPlanId: String) -> Unit,
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
@@ -213,6 +247,7 @@ private fun HomeScreen(
                             onClick = { deleteLastWorkoutPending = true },
                         )
                     }
+                    SyncButton(application = application)
                 },
             )
         },
@@ -285,6 +320,32 @@ private fun HomeScreen(
                 destination = destinations[selectedDestination],
                 modifier = Modifier.padding(innerPadding),
             )
+        }
+    }
+}
+
+/**
+ * Triggers a manual Google Drive sync (see [FitnessApplication.syncNow]): a spinner while
+ * syncing, otherwise the sync icon badged when there are unsynced local changes.
+ */
+@Composable
+private fun SyncButton(application: FitnessApplication, modifier: Modifier = Modifier) {
+    val syncState by application.syncState.collectAsState()
+    val hasUnsyncedChanges by application.localChangeTracker.hasUnsyncedChanges.collectAsState()
+
+    IconButton(
+        onClick = { application.syncNow() },
+        enabled = syncState != SyncState.Syncing,
+        modifier = modifier,
+    ) {
+        if (syncState == SyncState.Syncing) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+        } else {
+            BadgedBox(
+                badge = { if (hasUnsyncedChanges) Badge() },
+            ) {
+                Icon(Icons.Filled.Sync, contentDescription = "Sync with Google Drive")
+            }
         }
     }
 }

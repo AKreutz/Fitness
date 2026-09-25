@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Upsert
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,13 @@ interface WorkoutSessionDao {
 
     @Delete
     suspend fun delete(session: WorkoutSession)
+
+    @Query("SELECT * FROM workout_sessions")
+    suspend fun getAll(): List<WorkoutSession>
+
+    /** Inserts or updates each of [sessions] by id. Used to write a synced merge back. */
+    @Upsert
+    suspend fun upsertAll(sessions: List<WorkoutSession>)
 
     @Transaction
     @Query("SELECT * FROM workout_sessions ORDER BY completedAt DESC")

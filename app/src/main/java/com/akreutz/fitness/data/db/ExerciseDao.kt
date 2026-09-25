@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import com.akreutz.fitness.data.model.Exercise
 import kotlinx.coroutines.flow.Flow
 
@@ -30,4 +31,11 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getById(id: String): Exercise?
+
+    @Query("SELECT * FROM exercises")
+    suspend fun getAll(): List<Exercise>
+
+    /** Inserts or updates each of [exercises] by id. Used to write a synced merge back. */
+    @Upsert
+    suspend fun upsertAll(exercises: List<Exercise>)
 }
