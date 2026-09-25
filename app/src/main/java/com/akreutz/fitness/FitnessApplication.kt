@@ -6,7 +6,6 @@ import androidx.room.Room
 import com.akreutz.fitness.data.db.FitnessDatabase
 import com.akreutz.fitness.data.prefs.ActivePlanPreferences
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
-import com.akreutz.fitness.data.seed.PreloadedTrainingPlans
 import com.akreutz.fitness.data.sync.LocalChangeTracker
 import com.akreutz.fitness.data.sync.SyncManager
 import com.akreutz.fitness.data.sync.auth.GoogleAuthManager
@@ -69,18 +68,6 @@ class FitnessApplication : Application() {
 
     private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
     val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
-
-    override fun onCreate() {
-        super.onCreate()
-        // Makes sure the plans that ship with the app are available to pick from the plans
-        // screen. Never touches the active plan or any plan the user created themselves — see
-        // TrainingPlanRepository.createPreloadedTrainingPlanIfMissing.
-        CoroutineScope(Dispatchers.IO).launch {
-            PreloadedTrainingPlans.all.forEach { plan ->
-                trainingPlanRepository.createPreloadedTrainingPlanIfMissing(plan)
-            }
-        }
-    }
 
     /** Triggers a sync in the background, without blocking the caller on its result. */
     fun syncInBackground() {

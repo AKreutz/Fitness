@@ -15,8 +15,6 @@ import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.prefs.ActivePlanPreferences
-import com.akreutz.fitness.data.seed.PreloadedTrainingPlan
-import com.akreutz.fitness.data.seed.PreloadedTrainingPlans
 import com.akreutz.fitness.data.sync.LocalChangeTracker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -25,7 +23,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
 
 /**
  * Mediates reads/writes of [TrainingPlan]s (and their nested [Workout]s) against Room, and
@@ -134,87 +131,6 @@ class TrainingPlanRepository(
         localChangeTracker.markDirty()
         activePlanPreferences.setActiveTrainingPlanId(trainingPlan.id)
         return trainingPlan.id
-    }
-
-    /**
-     * Inserts [plan] as a new [TrainingPlan] (marked [TrainingPlan.isPreloaded]) together with its
-     * workouts, exercises, and logged [PreloadedSession]s — seeded as [WorkoutSession]s and, for
-     * each exercise a session names, an [ExercisePerformanceRecord] keyed by that session's
-     * [WorkoutSession.completedAt] — as a single transaction, unless a preloaded plan
-     * with that name already exists, in which case this does nothing. Assumes [plan] has exactly
-     * one workout, since every seeded session is logged against it; multi-workout preloaded plans
-     * would need each [PreloadedSession] to say which workout it was for. Never touches the active
-     * plan or any other existing plan, so it's safe to call unconditionally (e.g. every app start)
-     * without ever overriding a plan the user created or duplicating itself. Used to offer plans
-     * that ship with the app (see [com.akreutz.fitness.data.seed.PreloadedTrainingPlans]) from the
-     * plans screen.
-     */
-    suspend fun createPreloadedTrainingPlanIfMissing(plan: PreloadedTrainingPlan) {
-        val inserted = database.withTransaction {
-            val alreadyExists = database.trainingPlanDao().observeAll().first()
-                .any { it.trainingPlan.isPreloaded && it.trainingPlan.name == plan.name }
-            if (alreadyExists) return@withTransaction false
-
-            val trainingPlan = TrainingPlan(name = plan.name, isPreloaded = true)
-            database.trainingPlanDao().insert(trainingPlan)
-            plan.workouts.forEachIndexed { workoutIndex, workout ->
-                val workoutEntity = Workout(
-                    trainingPlanId = trainingPlan.id,
-                    name = workout.name,
-                    position = workoutIndex,
-                )
-                database.workoutDao().insert(workoutEntity)
-
-                // Each session's completion instant becomes the key its logged exercises'
-                // performanceHistory entries are recorded under, matching how a real guided
-                // session records them (see recordPerceivedEfforts) and its own WorkoutSession row.
-                val sessionCompletedAt = plan.sessions.associateWith { session ->
-                    session.completedOn.atStartOfDay(ZoneId.systemDefault()).toInstant()
-                }
-
-                workout.exercises.forEachIndexed { exerciseIndex, exercise ->
-                    val exerciseEntity = Exercise(
-                        workoutId = workoutEntity.id,
-                        name = exercise.name,
-                        type = exercise.type,
-                        sets = PreloadedTrainingPlans.reps.size,
-                        reps = PreloadedTrainingPlans.reps,
-                        weightKg = exercise.weightKg,
-                        weightIncrementKg = exercise.weightIncrementKg,
-                        position = exerciseIndex,
-                    )
-                    database.exerciseDao().insert(exerciseEntity)
-
-                    plan.sessions.forEach { session ->
-                        val performance = session.performances[exercise.name] ?: return@forEach
-                        database.exercisePerformanceRecordDao().insert(
-                            ExercisePerformanceRecord(
-                                exerciseId = exerciseEntity.id,
-                                completedAt = sessionCompletedAt.getValue(session),
-                                weightKg = performance.weightKg,
-                                perceivedEffort = performance.perceivedEffort,
-                            ),
-                        )
-                    }
-                }
-
-                if (workoutIndex == 0) {
-                    plan.sessions.forEach { session ->
-                        val completedAt = sessionCompletedAt.getValue(session)
-                        database.workoutSessionDao().insert(
-                            WorkoutSession(
-                                workoutId = workoutEntity.id,
-                                startedAt = completedAt,
-                                completedAt = completedAt,
-                                durationSeconds = 0L,
-                            ),
-                        )
-                    }
-                }
-            }
-            true
-        }
-        if (inserted) localChangeTracker.markDirty()
     }
 
     /**

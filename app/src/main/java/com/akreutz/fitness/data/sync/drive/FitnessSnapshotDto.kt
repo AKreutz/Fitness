@@ -52,13 +52,11 @@ data class FitnessSnapshotDto(
 data class TrainingPlanDto(
     val id: String,
     val name: String,
-    val isPreloaded: Boolean,
     val updatedAt: Long,
 ) {
     fun toEntity(): TrainingPlan = TrainingPlan(
         id = id,
         name = name,
-        isPreloaded = isPreloaded,
         updatedAt = Instant.ofEpochMilli(updatedAt),
     )
 
@@ -66,7 +64,6 @@ data class TrainingPlanDto(
         fun fromEntity(entity: TrainingPlan): TrainingPlanDto = TrainingPlanDto(
             id = entity.id,
             name = entity.name,
-            isPreloaded = entity.isPreloaded,
             updatedAt = entity.updatedAt.toEpochMilli(),
         )
     }
