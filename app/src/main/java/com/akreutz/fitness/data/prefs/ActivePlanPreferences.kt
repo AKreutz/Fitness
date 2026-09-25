@@ -19,7 +19,11 @@ private val Context.activePlanDataStore by preferencesDataStore(name = "active_p
  */
 class ActivePlanPreferences(private val context: Context) {
 
-    private val activeTrainingPlanIdKey = stringPreferencesKey("active_training_plan_id")
+    // Renamed (not just retyped) from the pre-UUID-migration "active_training_plan_id": that key
+    // held a Long, and DataStore throws a ClassCastException if a stringPreferencesKey of the
+    // same name reads a value still stored under the old type. A fresh key name means an
+    // existing installation's old Long value is simply never read, rather than crashing.
+    private val activeTrainingPlanIdKey = stringPreferencesKey("active_training_plan_id_v2")
 
     val activeTrainingPlanId: Flow<String?> =
         context.activePlanDataStore.data.map { preferences ->
