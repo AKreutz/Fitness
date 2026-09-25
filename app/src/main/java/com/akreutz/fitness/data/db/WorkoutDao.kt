@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WorkoutDao {
     @Insert
-    suspend fun insert(workout: Workout): Long
+    suspend fun insert(workout: Workout)
 
     @Update
     suspend fun update(workout: Workout)
@@ -26,12 +26,12 @@ interface WorkoutDao {
 
     @Transaction
     @Query("SELECT * FROM workouts WHERE id = :id")
-    fun observeById(id: Long): Flow<WorkoutWithExercises?>
+    fun observeById(id: String): Flow<WorkoutWithExercises?>
 
     @Transaction
     @Query("SELECT * FROM workouts WHERE trainingPlanId = :trainingPlanId ORDER BY position")
-    fun observeForTrainingPlan(trainingPlanId: Long): Flow<List<WorkoutWithExercises>>
+    fun observeForTrainingPlan(trainingPlanId: String): Flow<List<WorkoutWithExercises>>
 
     @Query("SELECT COUNT(*) FROM workouts WHERE trainingPlanId = :trainingPlanId")
-    suspend fun countForTrainingPlan(trainingPlanId: Long): Int
+    suspend fun countForTrainingPlan(trainingPlanId: String): Int
 }

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ExerciseDao {
     @Insert
-    suspend fun insert(exercise: Exercise): Long
+    suspend fun insert(exercise: Exercise)
 
     @Update
     suspend fun update(exercise: Exercise)
@@ -23,11 +23,11 @@ interface ExerciseDao {
     suspend fun delete(exercise: Exercise)
 
     @Query("SELECT * FROM exercises WHERE workoutId = :workoutId ORDER BY position")
-    fun observeForWorkout(workoutId: Long): Flow<List<Exercise>>
+    fun observeForWorkout(workoutId: String): Flow<List<Exercise>>
 
     @Query("SELECT COUNT(*) FROM exercises WHERE workoutId = :workoutId")
-    suspend fun countForWorkout(workoutId: Long): Int
+    suspend fun countForWorkout(workoutId: String): Int
 
     @Query("SELECT * FROM exercises WHERE id = :id")
-    suspend fun getById(id: Long): Exercise?
+    suspend fun getById(id: String): Exercise?
 }

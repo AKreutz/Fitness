@@ -30,7 +30,7 @@ sealed interface PlanEditorUiState {
  */
 class PlanEditorViewModel(
     private val repository: TrainingPlanRepository,
-    private val trainingPlanId: Long,
+    private val trainingPlanId: String,
 ) : ViewModel() {
 
     val uiState: StateFlow<PlanEditorUiState> = repository.observeTrainingPlan(trainingPlanId)
@@ -61,7 +61,7 @@ class PlanEditorViewModel(
     }
 
     fun addExercise(
-        workoutId: Long,
+        workoutId: String,
         name: String,
         type: ExerciseType,
         sets: Int,
@@ -122,7 +122,7 @@ class PlanEditorViewModel(
 
 class PlanEditorViewModelFactory(
     private val repository: TrainingPlanRepository,
-    private val trainingPlanId: Long,
+    private val trainingPlanId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {

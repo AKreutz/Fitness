@@ -25,8 +25,8 @@ sealed interface ProfileUiState {
      */
     data class Loaded(
         val plans: List<TrainingPlanWithWorkouts>,
-        val activePlanId: Long?,
-        val completedSessionCounts: Map<Long, Int>,
+        val activePlanId: String?,
+        val completedSessionCounts: Map<String, Int>,
     ) : ProfileUiState
 }
 
@@ -53,7 +53,7 @@ class ProfileViewModel(private val repository: TrainingPlanRepository) : ViewMod
         )
 
     /** Switches the active plan to the one with [id]. */
-    fun selectPlan(id: Long) {
+    fun selectPlan(id: String) {
         viewModelScope.launch {
             repository.setActiveTrainingPlan(id)
         }

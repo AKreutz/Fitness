@@ -2,7 +2,7 @@ package com.akreutz.fitness.data.prefs
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -19,14 +19,14 @@ private val Context.activePlanDataStore by preferencesDataStore(name = "active_p
  */
 class ActivePlanPreferences(private val context: Context) {
 
-    private val activeTrainingPlanIdKey = longPreferencesKey("active_training_plan_id")
+    private val activeTrainingPlanIdKey = stringPreferencesKey("active_training_plan_id")
 
-    val activeTrainingPlanId: Flow<Long?> =
+    val activeTrainingPlanId: Flow<String?> =
         context.activePlanDataStore.data.map { preferences ->
             preferences[activeTrainingPlanIdKey]
         }
 
-    suspend fun setActiveTrainingPlanId(id: Long) {
+    suspend fun setActiveTrainingPlanId(id: String) {
         context.activePlanDataStore.edit { preferences ->
             preferences[activeTrainingPlanIdKey] = id
         }

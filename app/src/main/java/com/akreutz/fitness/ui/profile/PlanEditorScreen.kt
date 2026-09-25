@@ -65,7 +65,7 @@ import com.akreutz.fitness.ui.common.DraggableList
 @Composable
 fun PlanEditorScreen(
     repository: TrainingPlanRepository,
-    trainingPlanId: Long,
+    trainingPlanId: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -140,7 +140,7 @@ private fun PlanEditorContent(
     onDeleteWorkout: (workout: Workout) -> Unit,
     onMoveWorkout: (workouts: List<Workout>, fromIndex: Int, toIndex: Int) -> Unit,
     onAddExercise: (
-        workoutId: Long,
+        workoutId: String,
         name: String,
         type: ExerciseType,
         sets: Int,

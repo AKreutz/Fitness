@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WorkoutSessionDao {
     @Insert
-    suspend fun insert(session: WorkoutSession): Long
+    suspend fun insert(session: WorkoutSession)
 
     @Delete
     suspend fun delete(session: WorkoutSession)
@@ -33,5 +33,5 @@ interface WorkoutSessionDao {
             "WHERE workouts.trainingPlanId = :trainingPlanId " +
             "ORDER BY workout_sessions.completedAt DESC LIMIT 1",
     )
-    fun observeLastFinishedWorkoutId(trainingPlanId: Long): Flow<Long?>
+    fun observeLastFinishedWorkoutId(trainingPlanId: String): Flow<String?>
 }

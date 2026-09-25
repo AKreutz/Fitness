@@ -5,14 +5,16 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.time.Instant
+import java.util.UUID
 
 /**
  * One recorded performance of an [Exercise]: the weight used and how hard it felt, for the
  * [WorkoutSession] (identified by [completedAt], its [WorkoutSession.completedAt]) it was
- * performed in. Together, an exercise's records make up its [ExercisePerformanceHistory]. Kept as
- * its own table (rather than a column on [Exercise]) so two devices logging different performances
- * of the same exercise merge as independent rows instead of one clobbering the other. [updatedAt]
- * is when it was last written, for future multi-device sync to merge by.
+ * performed in. [id] is a client-generated UUID (see [TrainingPlan.id]). Together, an exercise's
+ * records make up its [ExercisePerformanceHistory]. Kept as its own table (rather than a column
+ * on [Exercise]) so two devices logging different performances of the same exercise merge as
+ * independent rows instead of one clobbering the other. [updatedAt] is when it was last written,
+ * for future multi-device sync to merge by.
  */
 @Entity(
     tableName = "exercise_performance_records",
@@ -27,9 +29,9 @@ import java.time.Instant
     indices = [Index("exerciseId")],
 )
 data class ExercisePerformanceRecord(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0L,
-    val exerciseId: Long,
+    @PrimaryKey
+    val id: String = UUID.randomUUID().toString(),
+    val exerciseId: String,
     val completedAt: Instant,
     val weightKg: Double,
     val perceivedEffort: PerceivedEffort,

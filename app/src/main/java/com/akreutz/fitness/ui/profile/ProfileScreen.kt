@@ -47,8 +47,8 @@ import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 @Composable
 fun ProfileScreen(
     uiState: ProfileUiState,
-    onSelectPlan: (id: Long) -> Unit,
-    onEditPlan: (id: Long) -> Unit,
+    onSelectPlan: (id: String) -> Unit,
+    onEditPlan: (id: String) -> Unit,
     onDeletePlan: (plan: TrainingPlan) -> Unit,
     onCreatePlan: () -> Unit,
     modifier: Modifier = Modifier,

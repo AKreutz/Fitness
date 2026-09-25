@@ -47,10 +47,10 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
                 initialValue = ActiveTrainingPlanUiState.Loading,
             )
 
-    private val _startWorkoutEvents = MutableSharedFlow<Long>(extraBufferCapacity = 1)
+    private val _startWorkoutEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     /** Emits the id of a [com.akreutz.fitness.data.model.Workout] each time one is started. */
-    val startWorkoutEvents: SharedFlow<Long> = _startWorkoutEvents
+    val startWorkoutEvents: SharedFlow<String> = _startWorkoutEvents
 
     /**
      * Starts the next workout in the active plan's rotation (see
@@ -71,7 +71,7 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
 
     /** Adds a new exercise to the workout with [workoutId]. */
     fun addExercise(
-        workoutId: Long,
+        workoutId: String,
         name: String,
         type: ExerciseType,
         sets: Int,

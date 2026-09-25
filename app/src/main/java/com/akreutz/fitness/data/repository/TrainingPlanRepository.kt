@@ -38,7 +38,7 @@ class TrainingPlanRepository(
         database.trainingPlanDao().observeAll()
 
     /** The workout with [workoutId] together with its exercises, or `null` if it doesn't exist. */
-    fun observeWorkout(workoutId: Long): Flow<WorkoutWithExercises?> =
+    fun observeWorkout(workoutId: String): Flow<WorkoutWithExercises?> =
         database.workoutDao().observeById(workoutId)
 
     /** Every completed [WorkoutSession], each with the [Workout] it was for, most recent first. */
@@ -84,7 +84,7 @@ class TrainingPlanRepository(
         }
 
     /** The plan with [trainingPlanId], or `null` if it doesn't exist (e.g. was just deleted). */
-    fun observeTrainingPlan(trainingPlanId: Long): Flow<TrainingPlanWithWorkouts?> =
+    fun observeTrainingPlan(trainingPlanId: String): Flow<TrainingPlanWithWorkouts?> =
         database.trainingPlanDao().observeById(trainingPlanId)
 
     /**
@@ -94,21 +94,21 @@ class TrainingPlanRepository(
      * workouts, and any exercises added to them) at once, since nothing is persisted until the
      * user finishes onboarding.
      */
-    suspend fun createTrainingPlan(name: String, workouts: List<DraftWorkout>): Long {
-        val trainingPlanId = database.withTransaction {
-            val id = database.trainingPlanDao().insert(TrainingPlan(name = name))
+    suspend fun createTrainingPlan(name: String, workouts: List<DraftWorkout>): String {
+        val trainingPlan = TrainingPlan(name = name)
+        database.withTransaction {
+            database.trainingPlanDao().insert(trainingPlan)
             workouts.forEachIndexed { workoutIndex, workout ->
-                val workoutId = database.workoutDao().insert(
-                    Workout(
-                        trainingPlanId = id,
-                        name = workout.name,
-                        position = workoutIndex,
-                    ),
+                val workoutEntity = Workout(
+                    trainingPlanId = trainingPlan.id,
+                    name = workout.name,
+                    position = workoutIndex,
                 )
+                database.workoutDao().insert(workoutEntity)
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
                     database.exerciseDao().insert(
                         Exercise(
-                            workoutId = workoutId,
+                            workoutId = workoutEntity.id,
                             name = exercise.name,
                             type = exercise.type,
                             sets = exercise.sets,
@@ -121,10 +121,9 @@ class TrainingPlanRepository(
                     )
                 }
             }
-            id
         }
-        activePlanPreferences.setActiveTrainingPlanId(trainingPlanId)
-        return trainingPlanId
+        activePlanPreferences.setActiveTrainingPlanId(trainingPlan.id)
+        return trainingPlan.id
     }
 
     /**
@@ -146,17 +145,15 @@ class TrainingPlanRepository(
                 .any { it.trainingPlan.isPreloaded && it.trainingPlan.name == plan.name }
             if (alreadyExists) return@withTransaction
 
-            val trainingPlanId = database.trainingPlanDao().insert(
-                TrainingPlan(name = plan.name, isPreloaded = true),
-            )
+            val trainingPlan = TrainingPlan(name = plan.name, isPreloaded = true)
+            database.trainingPlanDao().insert(trainingPlan)
             plan.workouts.forEachIndexed { workoutIndex, workout ->
-                val workoutId = database.workoutDao().insert(
-                    Workout(
-                        trainingPlanId = trainingPlanId,
-                        name = workout.name,
-                        position = workoutIndex,
-                    ),
+                val workoutEntity = Workout(
+                    trainingPlanId = trainingPlan.id,
+                    name = workout.name,
+                    position = workoutIndex,
                 )
+                database.workoutDao().insert(workoutEntity)
 
                 // Each session's completion instant becomes the key its logged exercises'
                 // performanceHistory entries are recorded under, matching how a real guided
@@ -166,24 +163,23 @@ class TrainingPlanRepository(
                 }
 
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
-                    val exerciseId = database.exerciseDao().insert(
-                        Exercise(
-                            workoutId = workoutId,
-                            name = exercise.name,
-                            type = exercise.type,
-                            sets = PreloadedTrainingPlans.reps.size,
-                            reps = PreloadedTrainingPlans.reps,
-                            weightKg = exercise.weightKg,
-                            weightIncrementKg = exercise.weightIncrementKg,
-                            position = exerciseIndex,
-                        ),
+                    val exerciseEntity = Exercise(
+                        workoutId = workoutEntity.id,
+                        name = exercise.name,
+                        type = exercise.type,
+                        sets = PreloadedTrainingPlans.reps.size,
+                        reps = PreloadedTrainingPlans.reps,
+                        weightKg = exercise.weightKg,
+                        weightIncrementKg = exercise.weightIncrementKg,
+                        position = exerciseIndex,
                     )
+                    database.exerciseDao().insert(exerciseEntity)
 
                     plan.sessions.forEach { session ->
                         val performance = session.performances[exercise.name] ?: return@forEach
                         database.exercisePerformanceRecordDao().insert(
                             ExercisePerformanceRecord(
-                                exerciseId = exerciseId,
+                                exerciseId = exerciseEntity.id,
                                 completedAt = sessionCompletedAt.getValue(session),
                                 weightKg = performance.weightKg,
                                 perceivedEffort = performance.perceivedEffort,
@@ -197,7 +193,7 @@ class TrainingPlanRepository(
                         val completedAt = sessionCompletedAt.getValue(session)
                         database.workoutSessionDao().insert(
                             WorkoutSession(
-                                workoutId = workoutId,
+                                workoutId = workoutEntity.id,
                                 startedAt = completedAt,
                                 completedAt = completedAt,
                                 durationSeconds = 0L,
@@ -248,7 +244,7 @@ class TrainingPlanRepository(
      * isn't found, or [workouts] is empty (an out-of-range index, consistent with
      * [List.getOrNull]-style lookups).
      */
-    private fun nextWorkoutIndex(workouts: List<Workout>, lastFinishedId: Long?): Int {
+    private fun nextWorkoutIndex(workouts: List<Workout>, lastFinishedId: String?): Int {
         if (workouts.isEmpty()) return 0
         val lastFinishedIndex = workouts.indexOfFirst { it.id == lastFinishedId }
         return if (lastFinishedIndex == -1) 0 else (lastFinishedIndex + 1) % workouts.size
@@ -270,8 +266,8 @@ class TrainingPlanRepository(
      * overwriting the first's.
      */
     suspend fun recordPerceivedEfforts(
-        workoutId: Long,
-        entries: Map<Long, ExercisePerformanceEntry>,
+        workoutId: String,
+        entries: Map<String, ExercisePerformanceEntry>,
         startedAt: Instant,
     ) {
         val completedAt = Instant.now()
@@ -307,13 +303,13 @@ class TrainingPlanRepository(
      * that consider only the most recent effort should check it was recorded at the current
      * weight, since after this the latest entry no longer was.
      */
-    suspend fun setExerciseWeight(exerciseId: Long, weightKg: Double) {
+    suspend fun setExerciseWeight(exerciseId: String, weightKg: Double) {
         val exercise = database.exerciseDao().getById(exerciseId) ?: return
         database.exerciseDao().update(exercise.copy(weightKg = weightKg, updatedAt = Instant.now()))
     }
 
     /** Switches the plan the user is currently associated with to the one with [id]. */
-    suspend fun setActiveTrainingPlan(id: Long) {
+    suspend fun setActiveTrainingPlan(id: String) {
         activePlanPreferences.setActiveTrainingPlanId(id)
     }
 
@@ -335,7 +331,7 @@ class TrainingPlanRepository(
      * exercises.
      */
     suspend fun addExercise(
-        workoutId: Long,
+        workoutId: String,
         name: String,
         type: ExerciseType,
         sets: Int,
@@ -371,13 +367,14 @@ class TrainingPlanRepository(
      * Adds a new, empty [Workout] named [name] to the plan with [trainingPlanId], placed after
      * its existing workouts. Used from the plan editor.
      */
-    suspend fun addWorkout(trainingPlanId: Long, name: String): Long {
-        return database.withTransaction {
+    suspend fun addWorkout(trainingPlanId: String, name: String): String {
+        val workout = database.withTransaction {
             val position = database.workoutDao().countForTrainingPlan(trainingPlanId)
-            database.workoutDao().insert(
-                Workout(trainingPlanId = trainingPlanId, name = name, position = position),
-            )
+            Workout(trainingPlanId = trainingPlanId, name = name, position = position).also {
+                database.workoutDao().insert(it)
+            }
         }
+        return workout.id
     }
 
     /**
@@ -403,7 +400,7 @@ class TrainingPlanRepository(
      * Reorders the plan with [trainingPlanId]'s workouts to match [orderedWorkoutIds] (every
      * workout id in the plan, in the desired order). Used from the plan editor's drag-to-reorder.
      */
-    suspend fun reorderWorkouts(trainingPlanId: Long, orderedWorkoutIds: List<Long>) {
+    suspend fun reorderWorkouts(trainingPlanId: String, orderedWorkoutIds: List<String>) {
         database.withTransaction {
             val workouts = database.workoutDao().observeForTrainingPlan(trainingPlanId).first()
                 .associateBy { it.workout.id }
@@ -463,7 +460,7 @@ class TrainingPlanRepository(
      * exercise id in the workout, in the desired order). Used from the plan editor's
      * drag-to-reorder.
      */
-    suspend fun reorderExercises(workoutId: Long, orderedExerciseIds: List<Long>) {
+    suspend fun reorderExercises(workoutId: String, orderedExerciseIds: List<String>) {
         database.withTransaction {
             val exercises = database.exerciseDao().observeForWorkout(workoutId).first()
                 .associateBy { it.id }

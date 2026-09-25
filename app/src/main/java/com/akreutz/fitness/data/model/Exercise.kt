@@ -5,17 +5,19 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.time.Instant
+import java.util.UUID
 
 /**
  * A single exercise within a [Workout]: a name, its equipment [type], and the prescription
- * (sets/reps/target weight) for it. [reps] is a preset rep scheme, one target per set (e.g.
- * `[8, 10, 12]`), chosen from a fixed list of options rather than typed freely. [weightKg] is
- * the starting weight, and [weightIncrementKg] is how much it should go up by between
- * progressions. [restSeconds] is how long to rest between working sets during a guided session.
- * [position] defines its order within the workout. [updatedAt] is when it was last written, for
- * future multi-device sync to merge by. Its performance history — per time performed, the weight
- * used and the perceived effort of that performance — is kept separately, as
- * [ExercisePerformanceRecord] rows; see [ExerciseWithPerformanceHistory].
+ * (sets/reps/target weight) for it. [id] is a client-generated UUID (see [TrainingPlan.id]).
+ * [reps] is a preset rep scheme, one target per set (e.g. `[8, 10, 12]`), chosen from a fixed
+ * list of options rather than typed freely. [weightKg] is the starting weight, and
+ * [weightIncrementKg] is how much it should go up by between progressions. [restSeconds] is how
+ * long to rest between working sets during a guided session. [position] defines its order within
+ * the workout. [updatedAt] is when it was last written, for future multi-device sync to merge by.
+ * Its performance history — per time performed, the weight used and the perceived effort of that
+ * performance — is kept separately, as [ExercisePerformanceRecord] rows; see
+ * [ExerciseWithPerformanceHistory].
  */
 @Entity(
     tableName = "exercises",
@@ -30,9 +32,9 @@ import java.time.Instant
     indices = [Index("workoutId")],
 )
 data class Exercise(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0L,
-    val workoutId: Long,
+    @PrimaryKey
+    val id: String = UUID.randomUUID().toString(),
+    val workoutId: String,
     val name: String,
     val type: ExerciseType,
     val sets: Int,

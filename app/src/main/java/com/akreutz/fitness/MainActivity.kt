@@ -157,9 +157,9 @@ fun FitnessApp(
         }
         composable(
             route = ROUTE_SESSION,
-            arguments = listOf(navArgument(ARG_WORKOUT_ID) { type = NavType.LongType }),
+            arguments = listOf(navArgument(ARG_WORKOUT_ID) { type = NavType.StringType }),
         ) { backStackEntry ->
-            val workoutId = backStackEntry.arguments?.getLong(ARG_WORKOUT_ID) ?: return@composable
+            val workoutId = backStackEntry.arguments?.getString(ARG_WORKOUT_ID) ?: return@composable
             WorkoutSessionScreen(
                 repository = trainingPlanRepository,
                 workoutId = workoutId,
@@ -169,9 +169,9 @@ fun FitnessApp(
         }
         composable(
             route = ROUTE_PLAN_EDITOR,
-            arguments = listOf(navArgument(ARG_TRAINING_PLAN_ID) { type = NavType.LongType }),
+            arguments = listOf(navArgument(ARG_TRAINING_PLAN_ID) { type = NavType.StringType }),
         ) { backStackEntry ->
-            val trainingPlanId = backStackEntry.arguments?.getLong(ARG_TRAINING_PLAN_ID)
+            val trainingPlanId = backStackEntry.arguments?.getString(ARG_TRAINING_PLAN_ID)
                 ?: return@composable
             PlanEditorScreen(
                 repository = trainingPlanRepository,
@@ -188,7 +188,7 @@ private fun HomeScreen(
     trainingPlan: ActiveTrainingPlanUiState.Loaded,
     homeViewModel: HomeViewModel,
     trainingPlanRepository: TrainingPlanRepository,
-    onEditPlan: (trainingPlanId: Long) -> Unit,
+    onEditPlan: (trainingPlanId: String) -> Unit,
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
     var showCreatePlan by rememberSaveable { mutableStateOf(false) }

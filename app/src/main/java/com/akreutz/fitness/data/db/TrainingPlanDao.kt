@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TrainingPlanDao {
     @Insert
-    suspend fun insert(trainingPlan: TrainingPlan): Long
+    suspend fun insert(trainingPlan: TrainingPlan)
 
     @Update
     suspend fun update(trainingPlan: TrainingPlan)
@@ -23,7 +23,7 @@ interface TrainingPlanDao {
 
     @Transaction
     @Query("SELECT * FROM training_plans WHERE id = :id")
-    fun observeById(id: Long): Flow<TrainingPlanWithWorkouts?>
+    fun observeById(id: String): Flow<TrainingPlanWithWorkouts?>
 
     @Transaction
     @Query("SELECT * FROM training_plans ORDER BY name")

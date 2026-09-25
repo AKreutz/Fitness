@@ -118,7 +118,7 @@ private const val RECOVERY_TICK_MILLIS = 1_000L
  */
 class WorkoutSessionViewModel(
     private val repository: TrainingPlanRepository,
-    private val workoutId: Long,
+    private val workoutId: String,
 ) : ViewModel() {
 
     /** When this session began, for computing its duration once it finishes. */
@@ -144,7 +144,7 @@ class WorkoutSessionViewModel(
      * Each entry's weight is the one actually used at rating time, so a later weight increase
      * (see [respondToWeightIncreaseOffer]) doesn't retroactively change what gets recorded.
      */
-    private val collectedRatings = mutableMapOf<Long, ExercisePerformanceEntry>()
+    private val collectedRatings = mutableMapOf<String, ExercisePerformanceEntry>()
 
     /** Whether every exercise has been rated and the session is ready to finish. */
     private val readyToFinish = MutableStateFlow(false)
@@ -351,7 +351,7 @@ class WorkoutSessionViewModel(
 
 class WorkoutSessionViewModelFactory(
     private val repository: TrainingPlanRepository,
-    private val workoutId: Long,
+    private val workoutId: String,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {

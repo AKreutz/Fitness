@@ -84,7 +84,7 @@ import kotlin.math.pow
 @Composable
 fun WorkoutSessionScreen(
     repository: TrainingPlanRepository,
-    workoutId: Long,
+    workoutId: String,
     onFinish: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
