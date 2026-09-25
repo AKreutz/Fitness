@@ -11,6 +11,7 @@ import java.time.Instant
  * [com.akreutz.fitness.ui.session.WorkoutSessionViewModel]) finishes. [startedAt] is when the
  * session began and [completedAt] when it finished; [durationSeconds] is the elapsed time
  * between them. If the workout it was for is later deleted, the session is deleted with it.
+ * [updatedAt] is when it was last written, for future multi-device sync to merge by.
  */
 @Entity(
     tableName = "workout_sessions",
@@ -31,4 +32,5 @@ data class WorkoutSession(
     val startedAt: Instant,
     val completedAt: Instant,
     val durationSeconds: Long,
+    val updatedAt: Instant = Instant.now(),
 )

@@ -11,7 +11,8 @@ import java.time.Instant
  * [WorkoutSession] (identified by [completedAt], its [WorkoutSession.completedAt]) it was
  * performed in. Together, an exercise's records make up its [ExercisePerformanceHistory]. Kept as
  * its own table (rather than a column on [Exercise]) so two devices logging different performances
- * of the same exercise merge as independent rows instead of one clobbering the other.
+ * of the same exercise merge as independent rows instead of one clobbering the other. [updatedAt]
+ * is when it was last written, for future multi-device sync to merge by.
  */
 @Entity(
     tableName = "exercise_performance_records",
@@ -32,4 +33,5 @@ data class ExercisePerformanceRecord(
     val completedAt: Instant,
     val weightKg: Double,
     val perceivedEffort: PerceivedEffort,
+    val updatedAt: Instant = Instant.now(),
 )

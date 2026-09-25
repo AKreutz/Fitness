@@ -69,7 +69,9 @@ class TrainingPlanRepository(
                 val record = database.exercisePerformanceRecordDao()
                     .getForExercise(exercise.id, session.completedAt) ?: return@forEach
                 database.exercisePerformanceRecordDao().delete(record)
-                database.exerciseDao().update(exercise.copy(weightKg = record.weightKg))
+                database.exerciseDao().update(
+                    exercise.copy(weightKg = record.weightKg, updatedAt = Instant.now()),
+                )
             }
         }
     }
@@ -307,7 +309,7 @@ class TrainingPlanRepository(
      */
     suspend fun setExerciseWeight(exerciseId: Long, weightKg: Double) {
         val exercise = database.exerciseDao().getById(exerciseId) ?: return
-        database.exerciseDao().update(exercise.copy(weightKg = weightKg))
+        database.exerciseDao().update(exercise.copy(weightKg = weightKg, updatedAt = Instant.now()))
     }
 
     /** Switches the plan the user is currently associated with to the one with [id]. */
@@ -362,7 +364,7 @@ class TrainingPlanRepository(
 
     /** Renames [workout] to [name]. Used from the plan editor. */
     suspend fun renameWorkout(workout: Workout, name: String) {
-        database.workoutDao().update(workout.copy(name = name))
+        database.workoutDao().update(workout.copy(name = name, updatedAt = Instant.now()))
     }
 
     /**
@@ -390,7 +392,8 @@ class TrainingPlanRepository(
                 .first()
             database.workoutDao().update(
                 siblings.mapIndexedNotNull { index, sibling ->
-                    sibling.workout.takeIf { it.position != index }?.copy(position = index)
+                    sibling.workout.takeIf { it.position != index }
+                        ?.copy(position = index, updatedAt = Instant.now())
                 },
             )
         }
@@ -406,7 +409,8 @@ class TrainingPlanRepository(
                 .associateBy { it.workout.id }
             database.workoutDao().update(
                 orderedWorkoutIds.mapIndexedNotNull { index, id ->
-                    workouts[id]?.workout?.takeIf { it.position != index }?.copy(position = index)
+                    workouts[id]?.workout?.takeIf { it.position != index }
+                        ?.copy(position = index, updatedAt = Instant.now())
                 },
             )
         }
@@ -432,6 +436,7 @@ class TrainingPlanRepository(
                 weightKg = weightKg,
                 weightIncrementKg = weightIncrementKg,
                 restSeconds = restSeconds,
+                updatedAt = Instant.now(),
             ),
         )
     }
@@ -446,7 +451,8 @@ class TrainingPlanRepository(
             val siblings = database.exerciseDao().observeForWorkout(exercise.workoutId).first()
             database.exerciseDao().update(
                 siblings.mapIndexedNotNull { index, sibling ->
-                    sibling.takeIf { it.position != index }?.copy(position = index)
+                    sibling.takeIf { it.position != index }
+                        ?.copy(position = index, updatedAt = Instant.now())
                 },
             )
         }
@@ -463,7 +469,8 @@ class TrainingPlanRepository(
                 .associateBy { it.id }
             database.exerciseDao().update(
                 orderedExerciseIds.mapIndexedNotNull { index, id ->
-                    exercises[id]?.takeIf { it.position != index }?.copy(position = index)
+                    exercises[id]?.takeIf { it.position != index }
+                        ?.copy(position = index, updatedAt = Instant.now())
                 },
             )
         }

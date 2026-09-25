@@ -4,10 +4,12 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.time.Instant
 
 /**
  * A single named workout (e.g. "Push Day") belonging to a [TrainingPlan], made up of one or
- * more [Exercise]s. [position] defines its order within the plan.
+ * more [Exercise]s. [position] defines its order within the plan. [updatedAt] is when it was
+ * last written, for future multi-device sync to merge by.
  */
 @Entity(
     tableName = "workouts",
@@ -27,4 +29,5 @@ data class Workout(
     val trainingPlanId: Long,
     val name: String,
     val position: Int,
+    val updatedAt: Instant = Instant.now(),
 )
