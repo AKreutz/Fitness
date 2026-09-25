@@ -41,11 +41,11 @@ import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.DraggableList
 
 /**
- * The mandatory first-run onboarding flow: name the plan and its workouts, then optionally add
- * exercises to them, before the rest of the app becomes available. Nothing is saved until
+ * The flow for creating a new [com.akreutz.fitness.data.model.TrainingPlan]: name it and its
+ * workouts, then optionally add exercises to them. Nothing is saved until
  * [OnboardingViewModel.finish] is called, so the back gesture on the exercises step can return to
- * the naming step without touching the database. Also reused from the Profile tab to create an
- * additional plan, via [onFinished].
+ * the naming step without touching the database. Reached from the Profile tab's "Create new plan",
+ * via [onFinished].
  */
 @Composable
 fun OnboardingScreen(

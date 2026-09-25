@@ -31,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -118,20 +117,13 @@ class MainActivity : ComponentActivity() {
 
                 when (val state = activeTrainingPlanState) {
                     is ActiveTrainingPlanUiState.Loading -> LoadingScreen()
-                    is ActiveTrainingPlanUiState.NoPlan -> {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background,
-                        ) {
-                            OnboardingScreen(repository = application.trainingPlanRepository)
-                        }
-                    }
-                    is ActiveTrainingPlanUiState.Loaded -> FitnessApp(
-                        trainingPlan = state,
-                        homeViewModel = homeViewModel,
-                        trainingPlanRepository = application.trainingPlanRepository,
-                        application = application,
-                    )
+                    is ActiveTrainingPlanUiState.NoPlan, is ActiveTrainingPlanUiState.Loaded ->
+                        FitnessApp(
+                            trainingPlan = state,
+                            homeViewModel = homeViewModel,
+                            trainingPlanRepository = application.trainingPlanRepository,
+                            application = application,
+                        )
                 }
             }
         }
@@ -166,7 +158,7 @@ private const val ARG_TRAINING_PLAN_ID = "trainingPlanId"
 
 @Composable
 fun FitnessApp(
-    trainingPlan: ActiveTrainingPlanUiState.Loaded,
+    trainingPlan: ActiveTrainingPlanUiState,
     homeViewModel: HomeViewModel,
     trainingPlanRepository: TrainingPlanRepository,
     application: FitnessApplication,
@@ -218,7 +210,7 @@ fun FitnessApp(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(
-    trainingPlan: ActiveTrainingPlanUiState.Loaded,
+    trainingPlan: ActiveTrainingPlanUiState,
     homeViewModel: HomeViewModel,
     trainingPlanRepository: TrainingPlanRepository,
     application: FitnessApplication,
@@ -275,7 +267,8 @@ private fun HomeScreen(
     ) { innerPadding ->
         when (selectedDestination) {
             0 -> ActiveTrainingPlanView(
-                workouts = trainingPlan.workoutsNextFirst,
+                workouts = (trainingPlan as? ActiveTrainingPlanUiState.Loaded)
+                    ?.workoutsNextFirst.orEmpty(),
                 modifier = Modifier.padding(innerPadding),
             )
             1 -> {
