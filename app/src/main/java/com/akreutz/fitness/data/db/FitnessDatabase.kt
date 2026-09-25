@@ -10,7 +10,7 @@ import com.akreutz.fitness.data.model.WorkoutSession
 
 @Database(
     entities = [TrainingPlan::class, Workout::class, Exercise::class, WorkoutSession::class],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
