@@ -183,7 +183,7 @@ private fun PlanEditorContent(
             ) { _, workoutWithExercises ->
                 WorkoutEditorCard(
                     workout = workoutWithExercises.workout,
-                    exercises = workoutWithExercises.exercises,
+                    exercises = workoutWithExercises.exercises.map { it.exercise },
                     onRename = { workoutPendingRename = workoutWithExercises.workout },
                     onDeleteRequest = { workoutPendingDelete = workoutWithExercises.workout },
                     onAddExercise = { exerciseDialogTarget = workoutWithExercises.workout to null },

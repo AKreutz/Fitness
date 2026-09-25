@@ -33,7 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.akreutz.fitness.data.model.Exercise
+import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
@@ -215,7 +215,7 @@ private fun WorkoutSessionCard(
 
 @Composable
 private fun ExerciseStatsRow(
-    exercise: Exercise,
+    exercise: ExerciseWithPerformanceHistory,
     sessionCompletedAt: Instant,
     modifier: Modifier = Modifier,
 ) {
@@ -226,7 +226,7 @@ private fun ExerciseStatsRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = exercise.name,
+            text = exercise.exercise.name,
             style = MaterialTheme.typography.bodyMedium,
         )
         if (entry != null) {

@@ -54,8 +54,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExerciseType
+import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PlateBreakdown
 import com.akreutz.fitness.data.model.RepScheme
@@ -203,7 +203,7 @@ private fun InProgressContent(
 
     val exerciseToRate = state.exerciseToRate
     if (exerciseToRate != null) {
-        RateEffortDialog(exerciseName = exerciseToRate.name, onRate = onRate)
+        RateEffortDialog(exerciseName = exerciseToRate.exercise.name, onRate = onRate)
     }
 
     val exerciseToOfferWeightIncrease = state.exerciseToOfferWeightIncrease
@@ -296,14 +296,14 @@ private fun ExerciseDotProgress(
  * no longer reflects how the exercise feels now.
  */
 @Composable
-private fun ExerciseHeaderRow(exercise: Exercise, modifier: Modifier = Modifier) {
+private fun ExerciseHeaderRow(exercise: ExerciseWithPerformanceHistory, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = modifier.fillMaxWidth(),
     ) {
         Text(
-            text = exercise.name,
+            text = exercise.exercise.name,
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.weight(1f, fill = false),
         )
@@ -348,17 +348,21 @@ private fun PerceivedEffort.label(): String = when (this) {
  * meaningful once warm-up is done, since sets aren't numbered until then.
  */
 @Composable
-private fun SetPillsRow(exercise: Exercise, setProgress: SetProgress, modifier: Modifier = Modifier) {
+private fun SetPillsRow(
+    exercise: ExerciseWithPerformanceHistory,
+    setProgress: SetProgress,
+    modifier: Modifier = Modifier,
+) {
     val currentSetNumber = setProgress.setNumber ?: return
     val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
-    val targetReps = RepScheme.targetReps(exercise.reps, lastPerceivedEffort)
-    val label = "${formatWeightCompact(exercise.weightKg)}kg×$targetReps"
+    val targetReps = RepScheme.targetReps(exercise.exercise.reps, lastPerceivedEffort)
+    val label = "${formatWeightCompact(exercise.exercise.weightKg)}kg×$targetReps"
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
-        for (setNumber in 1..exercise.sets) {
+        for (setNumber in 1..exercise.exercise.sets) {
             val isDone = setNumber < currentSetNumber
             val isCurrent = setNumber == currentSetNumber
             SetPill(
@@ -424,7 +428,7 @@ private fun SetPill(
 
 /** A preview strip for whichever exercise comes after the current one. */
 @Composable
-private fun UpNextRow(exercise: Exercise, modifier: Modifier = Modifier) {
+private fun UpNextRow(exercise: ExerciseWithPerformanceHistory, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -440,13 +444,13 @@ private fun UpNextRow(exercise: Exercise, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = exercise.name,
+            text = exercise.exercise.name,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = "${exercise.sets} sets",
+            text = "${exercise.exercise.sets} sets",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -492,8 +496,11 @@ private fun RateEffortDialog(exerciseName: String, onRate: (PerceivedEffort) -> 
  * [onRespond] receives the new weight to persist, or `null` to keep the exercise's current one.
  */
 @Composable
-private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Double?) -> Unit) {
-    if (exercise.type == ExerciseType.CABLE) {
+private fun WeightIncreaseOfferDialog(
+    exercise: ExerciseWithPerformanceHistory,
+    onRespond: (Double?) -> Unit,
+) {
+    if (exercise.exercise.type == ExerciseType.CABLE) {
         var weightText by remember { mutableStateOf("") }
         val newWeightKg = weightText.replace(',', '.').toDoubleOrNull()
         AlertDialog(
@@ -502,7 +509,7 @@ private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Double?) -
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "${exercise.name} has felt easy twice in a row. " +
+                        "${exercise.exercise.name} has felt easy twice in a row. " +
                             "What weight level should it use next time?",
                     )
                     OutlinedTextField(
@@ -525,7 +532,7 @@ private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Double?) -
             },
         )
     } else {
-        var incrementText by remember { mutableStateOf(exercise.weightIncrementKg.toString()) }
+        var incrementText by remember { mutableStateOf(exercise.exercise.weightIncrementKg.toString()) }
         val incrementKg = incrementText.replace(',', '.').toDoubleOrNull()
         AlertDialog(
             onDismissRequest = {},
@@ -536,8 +543,8 @@ private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Double?) -
                         String.format(
                             Locale.US,
                             "%s has felt easy twice in a row. Raise it from %.1f KG for next time?",
-                            exercise.name,
-                            exercise.weightKg,
+                            exercise.exercise.name,
+                            exercise.exercise.weightKg,
                         ),
                     )
                     OutlinedTextField(
@@ -551,7 +558,7 @@ private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Double?) -
             },
             confirmButton = {
                 Button(
-                    onClick = { onRespond(exercise.weightKg + incrementKg!!) },
+                    onClick = { onRespond(exercise.exercise.weightKg + incrementKg!!) },
                     enabled = incrementKg != null && incrementKg >= 0,
                 ) { Text("Increase") }
             },
@@ -569,7 +576,7 @@ private fun WeightIncreaseOfferDialog(exercise: Exercise, onRespond: (Double?) -
  */
 @Composable
 private fun CurrentExerciseCard(
-    exercise: Exercise,
+    exercise: ExerciseWithPerformanceHistory,
     setProgress: SetProgress,
     modifier: Modifier = Modifier,
 ) {
@@ -602,14 +609,14 @@ private fun CurrentExerciseCard(
                 .fillMaxWidth()
                 .padding(18.dp),
         ) {
-            if (exercise.type == ExerciseType.FREE_WEIGHTS) {
-                PlateBreakdownRow(weightKg = exercise.weightKg)
+            if (exercise.exercise.type == ExerciseType.FREE_WEIGHTS) {
+                PlateBreakdownRow(weightKg = exercise.exercise.weightKg)
             }
             val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
-            val targetReps = RepScheme.targetReps(exercise.reps, lastPerceivedEffort)
+            val targetReps = RepScheme.targetReps(exercise.exercise.reps, lastPerceivedEffort)
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = String.format(Locale.US, "%.1f KG", exercise.weightKg),
+                    text = String.format(Locale.US, "%.1f KG", exercise.exercise.weightKg),
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(

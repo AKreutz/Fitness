@@ -26,7 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.akreutz.fitness.data.model.Exercise
+import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
@@ -99,7 +99,7 @@ private fun WorkoutSection(workout: WorkoutWithExercises) {
  * perceived effort from the last time the exercise was performed.
  */
 @Composable
-private fun ExerciseCard(exercise: Exercise, modifier: Modifier = Modifier) {
+private fun ExerciseCard(exercise: ExerciseWithPerformanceHistory, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.elevatedCardColors(
@@ -109,7 +109,7 @@ private fun ExerciseCard(exercise: Exercise, modifier: Modifier = Modifier) {
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = exercise.name,
+                text = exercise.exercise.name,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(12.dp),
             )
@@ -124,7 +124,7 @@ private fun ExerciseCard(exercise: Exercise, modifier: Modifier = Modifier) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = String.format(Locale.US, "%.1f KG", exercise.weightKg),
+                        text = String.format(Locale.US, "%.1f KG", exercise.exercise.weightKg),
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -5,6 +5,7 @@ import com.akreutz.fitness.data.db.FitnessDatabase
 import com.akreutz.fitness.data.model.DraftWorkout
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
+import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
@@ -49,8 +50,8 @@ class TrainingPlanRepository(
      * it's still the *most recently completed* session overall (across every workout) — undoing
      * an older one could conflict with rating/weight changes a later session already made, so the
      * workouts screen only ever offers this for the latest one. Also undoes that session's effect
-     * on each of its workout's exercises: the [Exercise.performanceHistory] entry it recorded
-     * (keyed by [session]'s [WorkoutSession.completedAt]) is removed, and if a weight-increase
+     * on each of its workout's exercises: the [ExercisePerformanceRecord] it recorded (keyed by
+     * [session]'s [WorkoutSession.completedAt]) is removed, and if a weight-increase
      * offer was accepted for that exercise afterwards (see [setExerciseWeight]), its
      * [Exercise.weightKg] is rolled back to the weight actually used in [session] — the removed
      * entry's own [ExercisePerformanceEntry.weightKg], which is what the exercise was still at at
@@ -65,13 +66,10 @@ class TrainingPlanRepository(
             database.workoutSessionDao().delete(session)
             val exercises = database.exerciseDao().observeForWorkout(session.workoutId).first()
             exercises.forEach { exercise ->
-                val entry = exercise.performanceHistory[session.completedAt] ?: return@forEach
-                database.exerciseDao().update(
-                    exercise.copy(
-                        weightKg = entry.weightKg,
-                        performanceHistory = exercise.performanceHistory - session.completedAt,
-                    ),
-                )
+                val record = database.exercisePerformanceRecordDao()
+                    .getForExercise(exercise.id, session.completedAt) ?: return@forEach
+                database.exercisePerformanceRecordDao().delete(record)
+                database.exerciseDao().update(exercise.copy(weightKg = record.weightKg))
             }
         }
     }
@@ -130,8 +128,8 @@ class TrainingPlanRepository(
     /**
      * Inserts [plan] as a new [TrainingPlan] (marked [TrainingPlan.isPreloaded]) together with its
      * workouts, exercises, and logged [PreloadedSession]s — seeded as [WorkoutSession]s and, for
-     * each exercise a session names, an [Exercise.performanceHistory] entry keyed by that
-     * session's [WorkoutSession.completedAt] — as a single transaction, unless a preloaded plan
+     * each exercise a session names, an [ExercisePerformanceRecord] keyed by that session's
+     * [WorkoutSession.completedAt] — as a single transaction, unless a preloaded plan
      * with that name already exists, in which case this does nothing. Assumes [plan] has exactly
      * one workout, since every seeded session is logged against it; multi-workout preloaded plans
      * would need each [PreloadedSession] to say which workout it was for. Never touches the active
@@ -166,15 +164,7 @@ class TrainingPlanRepository(
                 }
 
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
-                    val performanceHistory = plan.sessions.mapNotNull { session ->
-                        val performance = session.performances[exercise.name] ?: return@mapNotNull null
-                        sessionCompletedAt.getValue(session) to ExercisePerformanceEntry(
-                            weightKg = performance.weightKg,
-                            perceivedEffort = performance.perceivedEffort,
-                        )
-                    }.toMap()
-
-                    database.exerciseDao().insert(
+                    val exerciseId = database.exerciseDao().insert(
                         Exercise(
                             workoutId = workoutId,
                             name = exercise.name,
@@ -184,9 +174,20 @@ class TrainingPlanRepository(
                             weightKg = exercise.weightKg,
                             weightIncrementKg = exercise.weightIncrementKg,
                             position = exerciseIndex,
-                            performanceHistory = performanceHistory,
                         ),
                     )
+
+                    plan.sessions.forEach { session ->
+                        val performance = session.performances[exercise.name] ?: return@forEach
+                        database.exercisePerformanceRecordDao().insert(
+                            ExercisePerformanceRecord(
+                                exerciseId = exerciseId,
+                                completedAt = sessionCompletedAt.getValue(session),
+                                weightKg = performance.weightKg,
+                                perceivedEffort = performance.perceivedEffort,
+                            ),
+                        )
+                    }
                 }
 
                 if (workoutIndex == 0) {
@@ -274,10 +275,12 @@ class TrainingPlanRepository(
         val completedAt = Instant.now()
         database.withTransaction {
             entries.forEach { (exerciseId, entry) ->
-                val exercise = database.exerciseDao().getById(exerciseId) ?: return@forEach
-                database.exerciseDao().update(
-                    exercise.copy(
-                        performanceHistory = exercise.performanceHistory + (completedAt to entry),
+                database.exercisePerformanceRecordDao().insert(
+                    ExercisePerformanceRecord(
+                        exerciseId = exerciseId,
+                        completedAt = completedAt,
+                        weightKg = entry.weightKg,
+                        perceivedEffort = entry.perceivedEffort,
                     ),
                 )
             }
@@ -298,9 +301,9 @@ class TrainingPlanRepository(
      * "easy" effort twice in a row: callers compute [weightKg] as
      * `exercise.weightKg + exercise.weightIncrementKg` for most exercises, but let the user
      * choose it directly for [ExerciseType.CABLE] ones, since cable machines' weight levels aren't
-     * evenly spaced. [Exercise.performanceHistory] is left as-is (for later visualization);
-     * readers that consider only the most recent effort should check it was recorded at the
-     * current weight, since after this the latest entry no longer was.
+     * evenly spaced. Its performance history is left as-is (for later visualization); readers
+     * that consider only the most recent effort should check it was recorded at the current
+     * weight, since after this the latest entry no longer was.
      */
     suspend fun setExerciseWeight(exerciseId: Long, weightKg: Double) {
         val exercise = database.exerciseDao().getById(exerciseId) ?: return

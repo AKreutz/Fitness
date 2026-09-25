@@ -4,8 +4,9 @@ import androidx.room.Embedded
 import androidx.room.Relation
 
 /**
- * A [WorkoutSession] together with the [Workout] it was for and that workout's [Exercise]s.
- * Each exercise's own [Exercise.performanceHistory] can be read against
+ * A [WorkoutSession] together with the [Workout] it was for and that workout's [Exercise]s (each
+ * with its performance history). Each exercise's own
+ * [ExerciseWithPerformanceHistory.performanceHistory] can be read against
  * [WorkoutSession.completedAt] to show that session's per-exercise stats, since sessions don't
  * otherwise keep their own snapshot of them.
  */
@@ -18,8 +19,9 @@ data class WorkoutSessionWithWorkout(
     )
     val workout: Workout,
     @Relation(
+        entity = Exercise::class,
         parentColumn = "workoutId",
         entityColumn = "workoutId",
     )
-    val exercises: List<Exercise>,
+    val exercises: List<ExerciseWithPerformanceHistory>,
 )

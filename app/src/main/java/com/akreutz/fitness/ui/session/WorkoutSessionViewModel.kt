@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
-import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
 import com.akreutz.fitness.data.model.ExerciseType
+import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
@@ -50,15 +50,15 @@ sealed interface WorkoutSessionUiState {
      */
     data class InProgress(
         val workoutName: String,
-        val exercise: Exercise,
+        val exercise: ExerciseWithPerformanceHistory,
         val exerciseNumber: Int,
         val totalExercises: Int,
-        val nextExercise: Exercise?,
+        val nextExercise: ExerciseWithPerformanceHistory?,
         val currentSet: SetProgress,
         val recoverySeconds: Int?,
         val recoveryGoalSeconds: Int,
-        val exerciseToRate: Exercise? = null,
-        val exerciseToOfferWeightIncrease: Exercise? = null,
+        val exerciseToRate: ExerciseWithPerformanceHistory? = null,
+        val exerciseToOfferWeightIncrease: ExerciseWithPerformanceHistory? = null,
     ) : WorkoutSessionUiState
 
     /** The workout had no exercises to guide through, or was deleted mid-session. */
@@ -131,13 +131,13 @@ class WorkoutSessionViewModel(
     private var recoveryJob: Job? = null
 
     /** The exercise awaiting a rating, or `null` if none is currently pending one. */
-    private val exerciseToRate = MutableStateFlow<Exercise?>(null)
+    private val exerciseToRate = MutableStateFlow<ExerciseWithPerformanceHistory?>(null)
 
     /**
      * The exercise awaiting a response to "raise the weight for next time?", or `null` if none
      * is currently pending one.
      */
-    private val exerciseToOfferWeightIncrease = MutableStateFlow<Exercise?>(null)
+    private val exerciseToOfferWeightIncrease = MutableStateFlow<ExerciseWithPerformanceHistory?>(null)
 
     /**
      * Ratings collected so far this session, by exercise id, saved once the workout finishes.
@@ -152,7 +152,7 @@ class WorkoutSessionViewModel(
     /** The latest exercise list, kept up to date independently of [uiState]'s own subscribers,
      * so [advance] can read the current exercise's set count without relying on [uiState] having
      * been collected. */
-    private var latestExercises: List<Exercise>? = null
+    private var latestExercises: List<ExerciseWithPerformanceHistory>? = null
 
     private val workout = repository.observeWorkout(workoutId)
 
@@ -162,13 +162,13 @@ class WorkoutSessionViewModel(
         val step: ExerciseStep,
         val resting: Boolean,
         val recoverySeconds: Int?,
-        val exerciseToRate: Exercise?,
-        val exerciseToOfferWeightIncrease: Exercise?,
+        val exerciseToRate: ExerciseWithPerformanceHistory?,
+        val exerciseToOfferWeightIncrease: ExerciseWithPerformanceHistory?,
         val readyToFinish: Boolean,
     )
 
     private val setState: Flow<Pair<ExerciseStep, Boolean>> = combine(step, resting, ::Pair)
-    private val prompts: Flow<Pair<Exercise?, Exercise?>> =
+    private val prompts: Flow<Pair<ExerciseWithPerformanceHistory?, ExerciseWithPerformanceHistory?>> =
         combine(exerciseToRate, exerciseToOfferWeightIncrease, ::Pair)
 
     private val progress: Flow<Progress> = combine(
@@ -190,7 +190,7 @@ class WorkoutSessionViewModel(
                 progress.exerciseIndex >= exercises.size -> WorkoutSessionUiState.Unavailable
                 else -> {
                     val exercise = exercises[progress.exerciseIndex]
-                    val setProgress = progress.step.toSetProgress(exercise.sets, progress.resting)
+                    val setProgress = progress.step.toSetProgress(exercise.exercise.sets, progress.resting)
                     WorkoutSessionUiState.InProgress(
                         workoutName = workout.workout.name,
                         exercise = exercise,
@@ -199,7 +199,7 @@ class WorkoutSessionViewModel(
                         nextExercise = exercises.getOrNull(progress.exerciseIndex + 1),
                         currentSet = setProgress,
                         recoverySeconds = progress.recoverySeconds.takeIf { progress.resting },
-                        recoveryGoalSeconds = exercise.restSeconds,
+                        recoveryGoalSeconds = exercise.exercise.restSeconds,
                         exerciseToRate = progress.exerciseToRate,
                         exerciseToOfferWeightIncrease = progress.exerciseToOfferWeightIncrease,
                     )
@@ -248,7 +248,7 @@ class WorkoutSessionViewModel(
             return
         }
 
-        val currentSetCount = latestExercises?.getOrNull(exerciseIndex.value)?.sets ?: 0
+        val currentSetCount = latestExercises?.getOrNull(exerciseIndex.value)?.exercise?.sets ?: 0
         val isLastSet = (currentStep as ExerciseStep.WorkingSet).setIndex == currentSetCount - 1
         if (isLastSet) {
             exerciseToRate.value = latestExercises?.getOrNull(exerciseIndex.value)
@@ -265,8 +265,8 @@ class WorkoutSessionViewModel(
      */
     fun rateExercise(effort: PerceivedEffort) {
         val rated = exerciseToRate.value ?: return
-        collectedRatings[rated.id] = ExercisePerformanceEntry(
-            weightKg = rated.weightKg,
+        collectedRatings[rated.exercise.id] = ExercisePerformanceEntry(
+            weightKg = rated.exercise.weightKg,
             perceivedEffort = effort,
         )
         exerciseToRate.value = null
@@ -292,7 +292,7 @@ class WorkoutSessionViewModel(
         exerciseToOfferWeightIncrease.value = null
         if (newWeightKg != null) {
             viewModelScope.launch {
-                repository.setExerciseWeight(exercise.id, newWeightKg)
+                repository.setExerciseWeight(exercise.exercise.id, newWeightKg)
                 proceedAfterRating()
             }
         } else {

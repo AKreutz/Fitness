@@ -4,7 +4,6 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import java.time.Instant
 
 /**
  * A single exercise within a [Workout]: a name, its equipment [type], and the prescription
@@ -12,8 +11,9 @@ import java.time.Instant
  * `[8, 10, 12]`), chosen from a fixed list of options rather than typed freely. [weightKg] is
  * the starting weight, and [weightIncrementKg] is how much it should go up by between
  * progressions. [restSeconds] is how long to rest between working sets during a guided session.
- * [position] defines its order within the workout. [performanceHistory] records, per time
- * performed, the weight used and the perceived effort of that performance.
+ * [position] defines its order within the workout. Its performance history — per time performed,
+ * the weight used and the perceived effort of that performance — is kept separately, as
+ * [ExercisePerformanceRecord] rows; see [ExerciseWithPerformanceHistory].
  */
 @Entity(
     tableName = "exercises",
@@ -39,31 +39,9 @@ data class Exercise(
     val weightIncrementKg: Double,
     val restSeconds: Int = DEFAULT_REST_SECONDS,
     val position: Int,
-    val performanceHistory: ExercisePerformanceHistory = emptyMap(),
 ) {
     companion object {
         /** The rest duration assumed for exercises created before [restSeconds] existed. */
         const val DEFAULT_REST_SECONDS: Int = 90
     }
 }
-
-/**
- * The most recent entry in [Exercise.performanceHistory], but only if it was recorded at the
- * exercise's current [Exercise.weightKg]. Once the weight changes (e.g. after a weight-increase
- * offer), the latest entry still reflects how the *old* weight felt, which no longer applies to
- * the new one, so callers that care about "how did this feel most recently" should use this
- * instead of reading [Exercise.performanceHistory] directly.
- */
-val Exercise.lastPerformanceAtCurrentWeight: ExercisePerformanceEntry?
-    get() = performanceHistory.maxByOrNull { it.key }
-        ?.value
-        ?.takeIf { it.weightKg == weightKg }
-
-/**
- * This exercise's [ExercisePerformanceEntry] recorded for the [com.akreutz.fitness.data.model.
- * WorkoutSession] that completed at [completedAt], or `null` if it wasn't performed (or rated) in
- * that session. Used to show a past session's per-exercise stats, since sessions don't keep their
- * own snapshot of them.
- */
-fun Exercise.performanceOn(completedAt: Instant): ExercisePerformanceEntry? =
-    performanceHistory[completedAt]
