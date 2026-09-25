@@ -21,6 +21,9 @@ interface WorkoutSessionDao {
     @Query("SELECT * FROM workout_sessions ORDER BY completedAt DESC")
     fun observeAllMostRecentFirst(): Flow<List<WorkoutSessionWithWorkout>>
 
+    @Query("SELECT * FROM workout_sessions WHERE workoutId = :workoutId")
+    suspend fun getForWorkout(workoutId: String): List<WorkoutSession>
+
     /**
      * The [WorkoutSession.workoutId] of the most recently completed session logged against any
      * workout in [trainingPlanId], or `null` if none has been completed yet (or they've all since

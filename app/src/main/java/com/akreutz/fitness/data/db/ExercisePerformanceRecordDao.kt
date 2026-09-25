@@ -20,4 +20,7 @@ interface ExercisePerformanceRecordDao {
             "WHERE exerciseId = :exerciseId AND completedAt = :completedAt",
     )
     suspend fun getForExercise(exerciseId: String, completedAt: Instant): ExercisePerformanceRecord?
+
+    @Query("SELECT * FROM exercise_performance_records WHERE exerciseId = :exerciseId")
+    suspend fun getAllForExercise(exerciseId: String): List<ExercisePerformanceRecord>
 }

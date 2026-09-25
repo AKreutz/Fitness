@@ -7,6 +7,7 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
 import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.ExerciseType
+import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import com.akreutz.fitness.data.model.Workout
@@ -64,15 +65,19 @@ class TrainingPlanRepository(
             if (mostRecent?.id != session.id) return@withTransaction
 
             database.workoutSessionDao().delete(session)
+            database.purgedIdDao().insert(listOf(PurgedId(id = session.id)))
             val exercises = database.exerciseDao().observeForWorkout(session.workoutId).first()
+            val purgedRecordIds = mutableListOf<PurgedId>()
             exercises.forEach { exercise ->
                 val record = database.exercisePerformanceRecordDao()
                     .getForExercise(exercise.id, session.completedAt) ?: return@forEach
                 database.exercisePerformanceRecordDao().delete(record)
+                purgedRecordIds += PurgedId(id = record.id)
                 database.exerciseDao().update(
                     exercise.copy(weightKg = record.weightKg, updatedAt = Instant.now()),
                 )
             }
+            database.purgedIdDao().insert(purgedRecordIds)
         }
     }
 
@@ -315,15 +320,45 @@ class TrainingPlanRepository(
 
     /**
      * Deletes [trainingPlan] together with its workouts, their exercises, and any workout
-     * sessions logged against them (all cascade via foreign keys). If it was the active plan,
-     * clears that so the app falls back to no plan rather than pointing at a deleted one.
+     * sessions logged against them (all cascade via foreign keys) — tombstoning every one of
+     * those ids (see [PurgedId]) first, since the cascade itself happens below Room and emits no
+     * per-row callback to hook into. If it was the active plan, clears that so the app falls back
+     * to no plan rather than pointing at a deleted one.
      */
     suspend fun deleteTrainingPlan(trainingPlan: TrainingPlan) {
         val wasActive = activePlanPreferences.activeTrainingPlanId.first() == trainingPlan.id
-        database.trainingPlanDao().delete(trainingPlan)
+        database.withTransaction {
+            val workouts = database.workoutDao().observeForTrainingPlan(trainingPlan.id).first()
+            purgeWorkoutsCascade(workouts.map { it.workout })
+            database.purgedIdDao().insert(listOf(PurgedId(id = trainingPlan.id)))
+            database.trainingPlanDao().delete(trainingPlan)
+        }
         if (wasActive) {
             activePlanPreferences.clearActiveTrainingPlanId()
         }
+    }
+
+    /**
+     * Tombstones (see [PurgedId]) [workouts] together with their exercises, those exercises'
+     * performance records, and any workout sessions logged against them — everything that
+     * deleting [workouts] cascades away — without deleting anything itself; callers delete the
+     * workouts (or their owning plan) afterwards. Must run inside the same transaction as that
+     * delete, so nothing else can insert new children in between reading and tombstoning them.
+     */
+    private suspend fun purgeWorkoutsCascade(workouts: List<Workout>) {
+        val purgedIds = mutableListOf<PurgedId>()
+        workouts.forEach { workout ->
+            purgedIds += PurgedId(id = workout.id)
+            database.exerciseDao().observeForWorkout(workout.id).first().forEach { exercise ->
+                purgedIds += PurgedId(id = exercise.id)
+                database.exercisePerformanceRecordDao().getAllForExercise(exercise.id).forEach {
+                    purgedIds += PurgedId(id = it.id)
+                }
+            }
+            database.workoutSessionDao().getForWorkout(workout.id)
+                .forEach { purgedIds += PurgedId(id = it.id) }
+        }
+        database.purgedIdDao().insert(purgedIds)
     }
 
     /**
@@ -379,11 +414,13 @@ class TrainingPlanRepository(
 
     /**
      * Deletes [workout] together with its exercises and any workout sessions logged against it
-     * (both cascade via foreign keys), then renumbers its remaining sibling workouts so
+     * (both cascade via foreign keys, and tombstoned via [PurgedId] first — see
+     * [purgeWorkoutsCascade]), then renumbers its remaining sibling workouts so
      * [Workout.position] stays a dense 0..n-1 sequence. Used from the plan editor.
      */
     suspend fun deleteWorkout(workout: Workout) {
         database.withTransaction {
+            purgeWorkoutsCascade(listOf(workout))
             database.workoutDao().delete(workout)
             val siblings = database.workoutDao().observeForTrainingPlan(workout.trainingPlanId)
                 .first()
@@ -439,11 +476,16 @@ class TrainingPlanRepository(
     }
 
     /**
-     * Deletes [exercise], then renumbers its remaining sibling exercises so [Exercise.position]
-     * stays a dense 0..n-1 sequence. Used from the plan editor.
+     * Deletes [exercise] together with its performance records (cascading via foreign key, and
+     * tombstoned via [PurgedId] first, since the cascade itself happens below Room), then
+     * renumbers its remaining sibling exercises so [Exercise.position] stays a dense 0..n-1
+     * sequence. Used from the plan editor.
      */
     suspend fun deleteExercise(exercise: Exercise) {
         database.withTransaction {
+            val purgedIds = database.exercisePerformanceRecordDao().getAllForExercise(exercise.id)
+                .map { PurgedId(id = it.id) } + PurgedId(id = exercise.id)
+            database.purgedIdDao().insert(purgedIds)
             database.exerciseDao().delete(exercise)
             val siblings = database.exerciseDao().observeForWorkout(exercise.workoutId).first()
             database.exerciseDao().update(
