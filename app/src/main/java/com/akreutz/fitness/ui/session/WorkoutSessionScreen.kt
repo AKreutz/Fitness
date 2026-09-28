@@ -1,5 +1,9 @@
 package com.akreutz.fitness.ui.session
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,7 +57,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.akreutz.fitness.FitnessApplication
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
@@ -89,10 +95,22 @@ fun WorkoutSessionScreen(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val application = LocalContext.current.applicationContext as FitnessApplication
     val viewModel: WorkoutSessionViewModel = viewModel(
-        factory = WorkoutSessionViewModelFactory(repository, workoutId),
+        factory = WorkoutSessionViewModelFactory(repository, workoutId, application.restTimerAlerter),
     )
     val uiState by viewModel.uiState.collectAsState()
+
+    // So the rest timer's notification (see RestTimerAlerter) can actually be shown; harmless to
+    // ask every time the screen opens, since the system no-ops once already granted or denied.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // Matches Home's top bar: same TopAppBar, titled with the workout's name once known.
     val title = (uiState as? WorkoutSessionUiState.InProgress)?.workoutName.orEmpty()

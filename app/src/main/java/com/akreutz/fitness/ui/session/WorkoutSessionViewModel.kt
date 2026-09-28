@@ -115,10 +115,13 @@ private const val RECOVERY_TICK_MILLIS = 1_000L
  * session in a row then also prompts whether to raise its weight for next time (via
  * [respondToWeightIncreaseOffer]). Once the workout's last exercise is rated (and any such offer
  * answered), persists all of the session's ratings under today's date and finishes the session.
+ * When a rest period reaches its exercise's prescribed rest duration, [restTimerAlerter] is fired
+ * once (not on every later tick) to notify the user that rest is over.
  */
 class WorkoutSessionViewModel(
     private val repository: TrainingPlanRepository,
     private val workoutId: String,
+    private val restTimerAlerter: RestTimerAlerter,
 ) : ViewModel() {
 
     /** When this session began, for computing its duration once it finishes. */
@@ -329,10 +332,17 @@ class WorkoutSessionViewModel(
     private fun startRecoveryTimer() {
         resting.value = true
         recoverySeconds.value = 0
+        val goalSeconds = latestExercises?.getOrNull(exerciseIndex.value)?.exercise?.restSeconds
+        var alerted = false
         recoveryJob = viewModelScope.launch {
             while (true) {
                 delay(RECOVERY_TICK_MILLIS)
-                recoverySeconds.value = (recoverySeconds.value ?: 0) + 1
+                val seconds = (recoverySeconds.value ?: 0) + 1
+                recoverySeconds.value = seconds
+                if (!alerted && goalSeconds != null && seconds >= goalSeconds) {
+                    alerted = true
+                    restTimerAlerter.onRestGoalReached()
+                }
             }
         }
     }
@@ -352,10 +362,11 @@ class WorkoutSessionViewModel(
 class WorkoutSessionViewModelFactory(
     private val repository: TrainingPlanRepository,
     private val workoutId: String,
+    private val restTimerAlerter: RestTimerAlerter,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         require(modelClass.isAssignableFrom(WorkoutSessionViewModel::class.java))
-        return WorkoutSessionViewModel(repository, workoutId) as T
+        return WorkoutSessionViewModel(repository, workoutId, restTimerAlerter) as T
     }
 }
