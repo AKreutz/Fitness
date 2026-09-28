@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -75,6 +76,7 @@ import com.akreutz.fitness.ui.theme.PlateChrome1_25
 import com.akreutz.fitness.ui.theme.PlateGreen10
 import com.akreutz.fitness.ui.theme.PlateWhite5
 import com.akreutz.fitness.ui.theme.PlateYellow15
+import com.akreutz.fitness.ui.theme.SlateBlueContainer
 import java.util.Locale
 import kotlin.math.pow
 
@@ -629,6 +631,11 @@ private fun CurrentExerciseCard(
         ) {
             if (exercise.exercise.type == ExerciseType.FREE_WEIGHTS) {
                 PlateBreakdownRow(weightKg = exercise.exercise.weightKg)
+            } else {
+                StackBreakdownRow(
+                    weightKg = exercise.exercise.weightKg,
+                    incrementKg = exercise.exercise.weightIncrementKg,
+                )
             }
             val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
             val targetReps = RepScheme.targetReps(exercise.exercise.reps, lastPerceivedEffort)
@@ -692,6 +699,109 @@ private fun PlateBreakdownRow(weightKg: Double, modifier: Modifier = Modifier) {
     if (plates.isEmpty() && weightKg != PlateBreakdown.BAR_WEIGHT_KG) return
 
     BarbellSideView(plates = plates, modifier = modifier)
+}
+
+/** How many rungs [StackBreakdownRow] draws around the current weight, current one included. */
+private const val STACK_RUNG_COUNT = 5
+
+/**
+ * A visual stand-in for a cable machine's weight stack: [STACK_RUNG_COUNT] plates centered on
+ * [weightKg], each spaced by [incrementKg], drawn lightest at the top and heaviest at the bottom
+ * as on a real stack. A pin marks the current weight; that plate and the lighter ones stacked
+ * above it (the part of the stack actually lifted together) are shaded as engaged, while the
+ * heavier plates left resting below stay outlined. Since [Exercise] doesn't record a machine's
+ * real stack increments, the rungs are a generic ladder around the current weight rather than
+ * an exact stack — enough to place it, not to claim it's the real machine's numbers.
+ */
+@Composable
+private fun StackBreakdownRow(weightKg: Double, incrementKg: Double, modifier: Modifier = Modifier) {
+    val step = if (incrementKg > 0.0) incrementKg else 1.0
+    val pinIndex = STACK_RUNG_COUNT / 2 // 0 = top/lightest rung, engaged plates are index <= pinIndex
+    val weights = (0 until STACK_RUNG_COUNT).map { index -> weightKg + (index - pinIndex) * step }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = modifier,
+    ) {
+        weights.forEachIndexed { index, rungWeightKg ->
+            StackPlate(
+                weightKg = rungWeightKg,
+                isPin = index == pinIndex,
+                isEngaged = index <= pinIndex,
+            )
+        }
+    }
+}
+
+/**
+ * One rung of [StackBreakdownRow]'s stack: a rounded bar, filled solid when [isEngaged] (lifted
+ * along with the pinned plate) or just outlined otherwise. Only the pinned rung — the current
+ * weight — is labeled, with a sideways-T pin (a short rod capped by a rounded crossbar) drawn at
+ * its right edge; the rest stay unlabeled, since they're a generic ladder rather than real stack
+ * numbers (see [StackBreakdownRow]).
+ */
+@Composable
+private fun StackPlate(weightKg: Double, isPin: Boolean, isEngaged: Boolean, modifier: Modifier = Modifier) {
+    val containerColor = when {
+        isPin -> MaterialTheme.colorScheme.primary
+        isEngaged -> SlateBlueContainer
+        else -> Color.Transparent
+    }
+    val borderModifier = if (isEngaged) {
+        Modifier
+    } else {
+        Modifier.border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
+    }
+
+    Box(contentAlignment = Alignment.CenterEnd, modifier = modifier) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(if (isPin) 64.dp else 60.dp)
+                .height(if (isPin) 20.dp else 17.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(containerColor)
+                .then(borderModifier),
+        ) {
+            if (isPin) {
+                Text(
+                    text = formatWeightCompact(weightKg),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+            }
+        }
+        if (isPin) {
+            StackPin()
+        }
+    }
+}
+
+/**
+ * The sideways-T pin marking the current weight on [StackBreakdownRow]: a short rod, colored the
+ * same as the barbell's bar (see [BarbellSideView]'s sleeve), sitting right at the selected
+ * plate's edge (not overlapping its face) and capped by a rounded vertical crossbar colored
+ * [PlateYellow15] as on a real selector pin.
+ */
+@Composable
+private fun StackPin(modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.offset(x = 8.dp)) {
+        Box(
+            modifier = Modifier
+                .width(8.dp)
+                .height(3.dp)
+                .background(MaterialTheme.colorScheme.onSurfaceVariant),
+        )
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(14.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(PlateYellow15),
+        )
+    }
 }
 
 /**
