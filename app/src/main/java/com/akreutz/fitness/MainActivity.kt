@@ -62,6 +62,9 @@ import com.akreutz.fitness.ui.profile.PlanEditorScreen
 import com.akreutz.fitness.ui.profile.ProfileScreen
 import com.akreutz.fitness.ui.profile.ProfileViewModel
 import com.akreutz.fitness.ui.profile.ProfileViewModelFactory
+import com.akreutz.fitness.ui.progress.ProgressScreen
+import com.akreutz.fitness.ui.progress.ProgressViewModel
+import com.akreutz.fitness.ui.progress.ProgressViewModelFactory
 import com.akreutz.fitness.ui.session.WorkoutSessionScreen
 import com.akreutz.fitness.ui.theme.FitnessTheme
 import com.akreutz.fitness.ui.workouts.WorkoutsDeleteLastButton
@@ -225,6 +228,9 @@ private fun HomeScreen(
     val profileViewModel: ProfileViewModel = viewModel(
         factory = ProfileViewModelFactory(trainingPlanRepository),
     )
+    val progressViewModel: ProgressViewModel = viewModel(
+        factory = ProgressViewModelFactory(trainingPlanRepository),
+    )
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -289,6 +295,13 @@ private fun HomeScreen(
                         onDismiss = { deleteLastWorkoutPending = false },
                     )
                 }
+            }
+            2 -> {
+                val progressState by progressViewModel.uiState.collectAsState()
+                ProgressScreen(
+                    uiState = progressState,
+                    modifier = Modifier.padding(innerPadding),
+                )
             }
             3 -> {
                 if (showCreatePlan) {
