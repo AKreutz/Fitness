@@ -7,6 +7,7 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.model.WorkoutSession
 
@@ -18,8 +19,9 @@ import com.akreutz.fitness.data.model.WorkoutSession
         WorkoutSession::class,
         ExercisePerformanceRecord::class,
         PurgedId::class,
+        WeightStack::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -30,6 +32,7 @@ abstract class FitnessDatabase : RoomDatabase() {
     abstract fun workoutSessionDao(): WorkoutSessionDao
     abstract fun exercisePerformanceRecordDao(): ExercisePerformanceRecordDao
     abstract fun purgedIdDao(): PurgedIdDao
+    abstract fun weightStackDao(): WeightStackDao
 
     companion object {
         const val DATABASE_NAME = "fitness.db"

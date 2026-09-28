@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import com.akreutz.fitness.data.model.DraftExercise
 import com.akreutz.fitness.data.model.DraftWorkout
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.RepScheme
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.DraggableList
@@ -70,9 +72,12 @@ fun OnboardingScreen(
         )
         OnboardingStep.ADD_EXERCISES -> {
             BackHandler(onBack = viewModel::backToNamePlan)
+            val weightStacks by viewModel.weightStacks.collectAsState(initial = emptyList())
             AddExercisesStep(
                 planName = viewModel.planName,
                 workouts = viewModel.workouts,
+                weightStacks = weightStacks,
+                onCreateWeightStack = viewModel::createWeightStack,
                 onAddExercise = viewModel::addExercise,
                 onUpdateExercise = viewModel::updateExercise,
                 onMoveExercise = viewModel::moveExercise,
@@ -189,6 +194,8 @@ private fun NamePlanStep(
 private fun AddExercisesStep(
     planName: String,
     workouts: List<DraftWorkout>,
+    weightStacks: List<WeightStack>,
+    onCreateWeightStack: suspend (name: String, levelsKg: List<Double>) -> WeightStack,
     onAddExercise: (
         workoutIndex: Int,
         name: String,
@@ -197,6 +204,7 @@ private fun AddExercisesStep(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) -> Unit,
     onUpdateExercise: (
@@ -208,6 +216,7 @@ private fun AddExercisesStep(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) -> Unit,
     onMoveExercise: (workoutIndex: Int, fromIndex: Int, toIndex: Int) -> Unit,
@@ -317,11 +326,13 @@ private fun AddExercisesStep(
         val exerciseIndex = exerciseIndexForDialog
         AddExerciseDialog(
             initial = exerciseIndex?.let { workouts[workoutIndex].exercises[it] },
+            weightStacks = weightStacks,
+            onCreateWeightStack = onCreateWeightStack,
             onDismiss = {
                 workoutIndexForDialog = null
                 exerciseIndexForDialog = null
             },
-            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, restSeconds ->
+            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, weightStackId, restSeconds ->
                 if (exerciseIndex == null) {
                     onAddExercise(
                         workoutIndex,
@@ -331,6 +342,7 @@ private fun AddExercisesStep(
                         reps,
                         weightKg,
                         weightIncrementKg,
+                        weightStackId,
                         restSeconds,
                     )
                 } else {
@@ -343,6 +355,7 @@ private fun AddExercisesStep(
                         reps,
                         weightKg,
                         weightIncrementKg,
+                        weightStackId,
                         restSeconds,
                     )
                 }

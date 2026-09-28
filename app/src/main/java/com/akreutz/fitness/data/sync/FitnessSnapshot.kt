@@ -4,6 +4,7 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.model.WorkoutSession
 
@@ -19,4 +20,5 @@ data class FitnessSnapshot(
     val workoutSessions: List<WorkoutSession>,
     val performanceRecords: List<ExercisePerformanceRecord>,
     val purgedIds: List<PurgedId>,
+    val weightStacks: List<WeightStack>,
 )

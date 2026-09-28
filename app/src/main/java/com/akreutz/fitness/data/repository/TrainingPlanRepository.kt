@@ -10,6 +10,7 @@ import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
@@ -301,6 +302,7 @@ class TrainingPlanRepository(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) {
         database.withTransaction {
@@ -314,6 +316,7 @@ class TrainingPlanRepository(
                     reps = reps,
                     weightKg = weightKg,
                     weightIncrementKg = weightIncrementKg,
+                    weightStackId = weightStackId,
                     restSeconds = restSeconds,
                     position = position,
                 ),
@@ -392,6 +395,7 @@ class TrainingPlanRepository(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) {
         database.exerciseDao().update(
@@ -402,6 +406,7 @@ class TrainingPlanRepository(
                 reps = reps,
                 weightKg = weightKg,
                 weightIncrementKg = weightIncrementKg,
+                weightStackId = weightStackId,
                 restSeconds = restSeconds,
                 updatedAt = Instant.now(),
             ),
@@ -447,6 +452,44 @@ class TrainingPlanRepository(
                         ?.copy(position = index, updatedAt = Instant.now())
                 },
             )
+        }
+        localChangeTracker.markDirty()
+    }
+
+    /** Every saved [WeightStack], for the cable-exercise weight-stack picker. */
+    fun observeWeightStacks(): Flow<List<WeightStack>> = database.weightStackDao().observeAll()
+
+    /** Creates a new [WeightStack] named [name] with the given [levelsKg]. */
+    suspend fun createWeightStack(name: String, levelsKg: List<Double>): WeightStack {
+        val stack = WeightStack(name = name, levelsKg = levelsKg.sorted())
+        database.weightStackDao().insert(stack)
+        localChangeTracker.markDirty()
+        return stack
+    }
+
+    /** Renames [stack] and/or replaces its levels. Used from the weight-stacks screen. */
+    suspend fun updateWeightStack(stack: WeightStack, name: String, levelsKg: List<Double>) {
+        database.weightStackDao().update(
+            stack.copy(name = name, levelsKg = levelsKg.sorted(), updatedAt = Instant.now()),
+        )
+        localChangeTracker.markDirty()
+    }
+
+    /**
+     * Deletes [stack], first clearing [Exercise.weightStackId] back to `null` (the "None" default)
+     * on every exercise currently assigned to it, so they fall back to freely typed weight-increase
+     * suggestions rather than referencing a stack that no longer exists.
+     */
+    suspend fun deleteWeightStack(stack: WeightStack) {
+        database.withTransaction {
+            val affected = database.exerciseDao().getAll().filter { it.weightStackId == stack.id }
+            if (affected.isNotEmpty()) {
+                database.exerciseDao().update(
+                    affected.map { it.copy(weightStackId = null, updatedAt = Instant.now()) },
+                )
+            }
+            database.purgedIdDao().insert(listOf(PurgedId(id = stack.id)))
+            database.weightStackDao().delete(stack)
         }
         localChangeTracker.markDirty()
     }

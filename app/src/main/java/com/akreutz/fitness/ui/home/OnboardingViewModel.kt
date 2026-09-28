@@ -60,6 +60,12 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
         step = OnboardingStep.NAME_PLAN
     }
 
+    /** Every saved [com.akreutz.fitness.data.model.WeightStack], for the weight-stack picker. */
+    val weightStacks = repository.observeWeightStacks()
+
+    suspend fun createWeightStack(name: String, levelsKg: List<Double>) =
+        repository.createWeightStack(name, levelsKg)
+
     fun addExercise(
         workoutIndex: Int,
         name: String,
@@ -68,6 +74,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) {
         workouts = workouts.toMutableList().apply {
@@ -80,6 +87,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
                     reps = reps,
                     weightKg = weightKg,
                     weightIncrementKg = weightIncrementKg,
+                    weightStackId = weightStackId,
                     restSeconds = restSeconds,
                 ),
             )
@@ -95,6 +103,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) {
         workouts = workouts.toMutableList().apply {
@@ -108,6 +117,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
                         reps = reps,
                         weightKg = weightKg,
                         weightIncrementKg = weightIncrementKg,
+                        weightStackId = weightStackId,
                         restSeconds = restSeconds,
                     )
                 },

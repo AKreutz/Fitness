@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -60,6 +61,16 @@ class PlanEditorViewModel(
         }
     }
 
+    val weightStacks: StateFlow<List<WeightStack>> = repository.observeWeightStacks()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
+            initialValue = emptyList(),
+        )
+
+    suspend fun createWeightStack(name: String, levelsKg: List<Double>): WeightStack =
+        repository.createWeightStack(name, levelsKg)
+
     fun addExercise(
         workoutId: String,
         name: String,
@@ -68,6 +79,7 @@ class PlanEditorViewModel(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) {
         viewModelScope.launch {
@@ -79,6 +91,7 @@ class PlanEditorViewModel(
                 reps,
                 weightKg,
                 weightIncrementKg,
+                weightStackId,
                 restSeconds,
             )
         }
@@ -92,6 +105,7 @@ class PlanEditorViewModel(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) {
         viewModelScope.launch {
@@ -103,6 +117,7 @@ class PlanEditorViewModel(
                 reps,
                 weightKg,
                 weightIncrementKg,
+                weightStackId,
                 restSeconds,
             )
         }

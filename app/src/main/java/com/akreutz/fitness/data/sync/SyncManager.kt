@@ -5,12 +5,14 @@ import com.akreutz.fitness.data.db.ExerciseDao
 import com.akreutz.fitness.data.db.ExercisePerformanceRecordDao
 import com.akreutz.fitness.data.db.PurgedIdDao
 import com.akreutz.fitness.data.db.TrainingPlanDao
+import com.akreutz.fitness.data.db.WeightStackDao
 import com.akreutz.fitness.data.db.WorkoutDao
 import com.akreutz.fitness.data.db.WorkoutSessionDao
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.model.WorkoutSession
 import java.time.Instant
@@ -32,6 +34,7 @@ class SyncManager(
     private val workoutSessionDao: WorkoutSessionDao,
     private val exercisePerformanceRecordDao: ExercisePerformanceRecordDao,
     private val purgedIdDao: PurgedIdDao,
+    private val weightStackDao: WeightStackDao,
     private val remoteDataSource: RemoteDataSource,
 ) {
     private var lastKnownRemoteVersion: String? = null
@@ -62,6 +65,7 @@ class SyncManager(
         workoutSessions = workoutSessionDao.getAll(),
         performanceRecords = exercisePerformanceRecordDao.getAll(),
         purgedIds = purgedIdDao.getAll(),
+        weightStacks = weightStackDao.getAll(),
     )
 
     private suspend fun applyToLocal(merged: FitnessSnapshot, currentLocal: FitnessSnapshot) {
@@ -72,6 +76,7 @@ class SyncManager(
         workoutSessionDao.upsertAll(merged.workoutSessions)
         exercisePerformanceRecordDao.upsertAll(merged.performanceRecords)
         purgedIdDao.insert(merged.purgedIds)
+        weightStackDao.upsertAll(merged.weightStacks)
     }
 
     private fun mergeSnapshots(local: FitnessSnapshot, remote: FitnessSnapshot): FitnessSnapshot {
@@ -93,6 +98,8 @@ class SyncManager(
                 ExercisePerformanceRecord::updatedAt,
             ).filterNot { it.id in purgedIdSet },
             purgedIds = purgedIds,
+            weightStacks = mergeById(local.weightStacks, remote.weightStacks, WeightStack::id, WeightStack::updatedAt)
+                .filterNot { it.id in purgedIdSet },
         )
     }
 

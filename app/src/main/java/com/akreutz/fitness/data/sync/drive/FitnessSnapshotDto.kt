@@ -6,6 +6,7 @@ import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.sync.FitnessSnapshot
@@ -26,6 +27,7 @@ data class FitnessSnapshotDto(
     val workoutSessions: List<WorkoutSessionDto>,
     val performanceRecords: List<ExercisePerformanceRecordDto>,
     val purgedIds: List<PurgedIdDto>,
+    val weightStacks: List<WeightStackDto> = emptyList(),
 ) {
     fun toSnapshot(): FitnessSnapshot = FitnessSnapshot(
         trainingPlans = trainingPlans.map { it.toEntity() },
@@ -34,6 +36,7 @@ data class FitnessSnapshotDto(
         workoutSessions = workoutSessions.map { it.toEntity() },
         performanceRecords = performanceRecords.map { it.toEntity() },
         purgedIds = purgedIds.map { it.toEntity() },
+        weightStacks = weightStacks.map { it.toEntity() },
     )
 
     companion object {
@@ -44,6 +47,7 @@ data class FitnessSnapshotDto(
             workoutSessions = snapshot.workoutSessions.map { WorkoutSessionDto.fromEntity(it) },
             performanceRecords = snapshot.performanceRecords.map { ExercisePerformanceRecordDto.fromEntity(it) },
             purgedIds = snapshot.purgedIds.map { PurgedIdDto.fromEntity(it) },
+            weightStacks = snapshot.weightStacks.map { WeightStackDto.fromEntity(it) },
         )
     }
 }
@@ -106,6 +110,7 @@ data class ExerciseDto(
     val reps: List<Int>,
     val weightKg: Double,
     val weightIncrementKg: Double,
+    val weightStackId: String? = null,
     val restSeconds: Int,
     val position: Int,
     val updatedAt: Long,
@@ -119,6 +124,7 @@ data class ExerciseDto(
         reps = reps,
         weightKg = weightKg,
         weightIncrementKg = weightIncrementKg,
+        weightStackId = weightStackId,
         restSeconds = restSeconds,
         position = position,
         updatedAt = Instant.ofEpochMilli(updatedAt),
@@ -134,6 +140,7 @@ data class ExerciseDto(
             reps = entity.reps,
             weightKg = entity.weightKg,
             weightIncrementKg = entity.weightIncrementKg,
+            weightStackId = entity.weightStackId,
             restSeconds = entity.restSeconds,
             position = entity.position,
             updatedAt = entity.updatedAt.toEpochMilli(),
@@ -211,5 +218,29 @@ data class PurgedIdDto(
     companion object {
         fun fromEntity(entity: PurgedId): PurgedIdDto =
             PurgedIdDto(id = entity.id, purgedAt = entity.purgedAt.toEpochMilli())
+    }
+}
+
+@Serializable
+data class WeightStackDto(
+    val id: String,
+    val name: String,
+    val levelsKg: List<Double>,
+    val updatedAt: Long,
+) {
+    fun toEntity(): WeightStack = WeightStack(
+        id = id,
+        name = name,
+        levelsKg = levelsKg,
+        updatedAt = Instant.ofEpochMilli(updatedAt),
+    )
+
+    companion object {
+        fun fromEntity(entity: WeightStack): WeightStackDto = WeightStackDto(
+            id = entity.id,
+            name = entity.name,
+            levelsKg = entity.levelsKg,
+            updatedAt = entity.updatedAt.toEpochMilli(),
+        )
     }
 }

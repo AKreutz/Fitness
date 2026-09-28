@@ -71,6 +71,7 @@ class FitnessApplication : Application() {
             workoutSessionDao = database.workoutSessionDao(),
             exercisePerformanceRecordDao = database.exercisePerformanceRecordDao(),
             purgedIdDao = database.purgedIdDao(),
+            weightStackDao = database.weightStackDao(),
             remoteDataSource = GoogleDriveDataSource(authManager),
         )
     }

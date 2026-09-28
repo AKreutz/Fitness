@@ -50,6 +50,7 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.common.AddExerciseDialog
@@ -73,6 +74,7 @@ fun PlanEditorScreen(
         factory = PlanEditorViewModelFactory(repository, trainingPlanId),
     )
     val uiState by viewModel.uiState.collectAsState()
+    val weightStacks by viewModel.weightStacks.collectAsState()
 
     Scaffold(
         modifier = modifier,
@@ -117,6 +119,8 @@ fun PlanEditorScreen(
             is PlanEditorUiState.Loaded -> {
                 PlanEditorContent(
                     plan = state.plan,
+                    weightStacks = weightStacks,
+                    onCreateWeightStack = viewModel::createWeightStack,
                     onRenameWorkout = viewModel::renameWorkout,
                     onAddWorkout = viewModel::addWorkout,
                     onDeleteWorkout = viewModel::deleteWorkout,
@@ -135,6 +139,8 @@ fun PlanEditorScreen(
 @Composable
 private fun PlanEditorContent(
     plan: TrainingPlanWithWorkouts,
+    weightStacks: List<WeightStack>,
+    onCreateWeightStack: suspend (name: String, levelsKg: List<Double>) -> WeightStack,
     onRenameWorkout: (workout: Workout, name: String) -> Unit,
     onAddWorkout: (name: String) -> Unit,
     onDeleteWorkout: (workout: Workout) -> Unit,
@@ -147,6 +153,7 @@ private fun PlanEditorContent(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) -> Unit,
     onUpdateExercise: (
@@ -157,6 +164,7 @@ private fun PlanEditorContent(
         reps: List<Int>,
         weightKg: Double,
         weightIncrementKg: Double,
+        weightStackId: String?,
         restSeconds: Int,
     ) -> Unit,
     onDeleteExercise: (exercise: Exercise) -> Unit,
@@ -289,8 +297,10 @@ private fun PlanEditorContent(
         val (workout, exercise) = dialogTarget
         AddExerciseDialog(
             initial = exercise?.toDraft(),
+            weightStacks = weightStacks,
+            onCreateWeightStack = onCreateWeightStack,
             onDismiss = { exerciseDialogTarget = null },
-            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, restSeconds ->
+            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, weightStackId, restSeconds ->
                 if (exercise == null) {
                     onAddExercise(
                         workout.id,
@@ -300,6 +310,7 @@ private fun PlanEditorContent(
                         reps,
                         weightKg,
                         weightIncrementKg,
+                        weightStackId,
                         restSeconds,
                     )
                 } else {
@@ -311,6 +322,7 @@ private fun PlanEditorContent(
                         reps,
                         weightKg,
                         weightIncrementKg,
+                        weightStackId,
                         restSeconds,
                     )
                 }
@@ -444,5 +456,6 @@ private fun Exercise.toDraft(): DraftExercise = DraftExercise(
     reps = reps,
     weightKg = weightKg,
     weightIncrementKg = weightIncrementKg,
+    weightStackId = weightStackId,
     restSeconds = restSeconds,
 )

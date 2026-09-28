@@ -13,6 +13,13 @@ class Converters {
         if (value.isEmpty()) emptyList() else value.split(",").map { it.toInt() }
 
     @TypeConverter
+    fun fromDoubleList(value: List<Double>): String = value.joinToString(",")
+
+    @TypeConverter
+    fun toDoubleList(value: String): List<Double> =
+        if (value.isEmpty()) emptyList() else value.split(",").map { it.toDouble() }
+
+    @TypeConverter
     fun fromInstant(value: Instant): Long = value.toEpochMilli()
 
     @TypeConverter

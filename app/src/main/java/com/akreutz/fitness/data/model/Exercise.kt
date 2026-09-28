@@ -12,9 +12,13 @@ import java.util.UUID
  * (sets/reps/target weight) for it. [id] is a client-generated UUID (see [TrainingPlan.id]).
  * [reps] is a preset rep scheme, one target per set (e.g. `[8, 10, 12]`), chosen from a fixed
  * list of options rather than typed freely. [weightKg] is the starting weight, and
- * [weightIncrementKg] is how much it should go up by between progressions. [restSeconds] is how
- * long to rest between working sets during a guided session. [position] defines its order within
- * the workout. [updatedAt] is when it was last written, for future multi-device sync to merge by.
+ * [weightIncrementKg] is how much it should go up by between progressions; for a
+ * [ExerciseType.CABLE] exercise it's unused (always `0.0`) and [weightStackId] takes its place —
+ * `null` (the default "None" stack) means weight-increase suggestions are typed freely, while a
+ * real [WeightStack] id means the next level in that stack is suggested instead. [restSeconds] is
+ * how long to rest between working sets during a guided session. [position] defines its order
+ * within the workout. [updatedAt] is when it was last written, for future multi-device sync to
+ * merge by.
  * Its performance history — per time performed, the weight used and the perceived effort of that
  * performance — is kept separately, as [ExercisePerformanceRecord] rows; see
  * [ExerciseWithPerformanceHistory].
@@ -41,6 +45,7 @@ data class Exercise(
     val reps: List<Int>,
     val weightKg: Double,
     val weightIncrementKg: Double,
+    val weightStackId: String? = null,
     val restSeconds: Int = DEFAULT_REST_SECONDS,
     val position: Int,
     val updatedAt: Instant = Instant.now(),

@@ -66,6 +66,7 @@ import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PlateBreakdown
 import com.akreutz.fitness.data.model.RepScheme
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.theme.OnPlateChrome1_25
@@ -102,6 +103,7 @@ fun WorkoutSessionScreen(
         factory = WorkoutSessionViewModelFactory(repository, workoutId, application.restTimerAlerter),
     )
     val uiState by viewModel.uiState.collectAsState()
+    val weightStacks by repository.observeWeightStacks().collectAsState(initial = emptyList())
 
     // So the rest timer's notification (see RestTimerAlerter) can actually be shown; harmless to
     // ask every time the screen opens, since the system no-ops once already granted or denied.
@@ -133,6 +135,7 @@ fun WorkoutSessionScreen(
             }
             is WorkoutSessionUiState.InProgress -> InProgressContent(
                 state = state,
+                weightStacks = weightStacks,
                 onNext = viewModel::advance,
                 onRate = viewModel::rateExercise,
                 onRespondToWeightIncreaseOffer = viewModel::respondToWeightIncreaseOffer,
@@ -172,6 +175,7 @@ private fun UnavailableContent(onCancel: () -> Unit, modifier: Modifier = Modifi
 @Composable
 private fun InProgressContent(
     state: WorkoutSessionUiState.InProgress,
+    weightStacks: List<WeightStack>,
     onNext: () -> Unit,
     onRate: (PerceivedEffort) -> Unit,
     onRespondToWeightIncreaseOffer: (Double?) -> Unit,
@@ -195,7 +199,11 @@ private fun InProgressContent(
             if (state.currentSet.isWarmUp.not()) {
                 SetPillsRow(exercise = state.exercise, setProgress = state.currentSet)
             }
-            CurrentExerciseCard(exercise = state.exercise, setProgress = state.currentSet)
+            CurrentExerciseCard(
+                exercise = state.exercise,
+                setProgress = state.currentSet,
+                weightStacks = weightStacks,
+            )
             if (state.nextExercise != null) {
                 UpNextRow(exercise = state.nextExercise)
             }
@@ -230,6 +238,7 @@ private fun InProgressContent(
     if (exerciseToOfferWeightIncrease != null) {
         WeightIncreaseOfferDialog(
             exercise = exerciseToOfferWeightIncrease,
+            weightStacks = weightStacks,
             onRespond = onRespondToWeightIncreaseOffer,
         )
     }
@@ -509,18 +518,65 @@ private fun RateEffortDialog(exerciseName: String, onRate: (PerceivedEffort) -> 
 /**
  * Prompts the user to raise [exercise]'s prescribed weight for next time, shown after they rate
  * it "easy" effort for the second session in a row. Not dismissible without answering, since the
- * session can't move on without one. For a [ExerciseType.CABLE] exercise, whose weight levels
- * aren't evenly spaced, the user types the next weight level directly instead of it being
- * computed from [Exercise.weightIncrementKg]; for others, the increase is prefilled from
- * [Exercise.weightIncrementKg] but editable, in case a different bump makes sense just this once.
- * [onRespond] receives the new weight to persist, or `null` to keep the exercise's current one.
+ * session can't move on without one. For a [ExerciseType.CABLE] exercise assigned a
+ * [WeightStack] (via [Exercise.weightStackId]) with a level above its current weight, that next
+ * level is prefilled but still editable, in case the user wants a different weight just this once
+ * (e.g. skipping a level, or a weight the stack doesn't list). A cable exercise with no stack
+ * assigned (or already at/above its top level) falls back to typing the next weight level with no
+ * prefill, since cable weight levels generally aren't evenly spaced and
+ * [Exercise.weightIncrementKg] doesn't apply. For free-weight exercises, the increase is prefilled
+ * from [Exercise.weightIncrementKg] but editable too, in case a different bump makes sense just
+ * this once. [onRespond] receives the new weight to persist, or `null` to keep the exercise's
+ * current one.
  */
 @Composable
 private fun WeightIncreaseOfferDialog(
     exercise: ExerciseWithPerformanceHistory,
+    weightStacks: List<WeightStack>,
     onRespond: (Double?) -> Unit,
 ) {
-    if (exercise.exercise.type == ExerciseType.CABLE) {
+    val stack = weightStacks.firstOrNull { it.id == exercise.exercise.weightStackId }
+    val nextStackLevelKg = stack?.let {
+        WeightStack.nextLevelAbove(it.levelsKg, exercise.exercise.weightKg)
+    }
+
+    if (exercise.exercise.type == ExerciseType.CABLE && nextStackLevelKg != null) {
+        var weightText by remember { mutableStateOf(formatWeightCompact(nextStackLevelKg)) }
+        val newWeightKg = weightText.replace(',', '.').toDoubleOrNull()
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Increase the weight?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        String.format(
+                            Locale.US,
+                            "%s has felt easy twice in a row. Raise it from %.1f KG for next " +
+                                "time?",
+                            exercise.exercise.name,
+                            exercise.exercise.weightKg,
+                        ),
+                    )
+                    OutlinedTextField(
+                        value = weightText,
+                        onValueChange = { weightText = it },
+                        label = { Text("Next weight (kg)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onRespond(newWeightKg) },
+                    enabled = newWeightKg != null && newWeightKg >= 0,
+                ) { Text("Increase") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { onRespond(null) }) { Text("Keep as is") }
+            },
+        )
+    } else if (exercise.exercise.type == ExerciseType.CABLE) {
         var weightText by remember { mutableStateOf("") }
         val newWeightKg = weightText.replace(',', '.').toDoubleOrNull()
         AlertDialog(
@@ -598,6 +654,7 @@ private fun WeightIncreaseOfferDialog(
 private fun CurrentExerciseCard(
     exercise: ExerciseWithPerformanceHistory,
     setProgress: SetProgress,
+    weightStacks: List<WeightStack>,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -632,9 +689,11 @@ private fun CurrentExerciseCard(
             if (exercise.exercise.type == ExerciseType.FREE_WEIGHTS) {
                 PlateBreakdownRow(weightKg = exercise.exercise.weightKg)
             } else {
+                val stack = weightStacks.firstOrNull { it.id == exercise.exercise.weightStackId }
                 StackBreakdownRow(
                     weightKg = exercise.exercise.weightKg,
                     incrementKg = exercise.exercise.weightIncrementKg,
+                    levelsKg = stack?.levelsKg,
                 )
             }
             val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
@@ -706,21 +765,56 @@ private const val STACK_RUNG_COUNT = 5
 
 /**
  * A visual stand-in for a cable machine's weight stack: [STACK_RUNG_COUNT] plates centered on
- * [weightKg], each spaced by [incrementKg], drawn lightest at the top and heaviest at the bottom
- * as on a real stack. A pin marks the current weight; that plate and the lighter ones stacked
- * above it (the part of the stack actually lifted together) are shaded as engaged, while the
- * heavier plates left resting below stay outlined. Since [Exercise] doesn't record a machine's
- * real stack increments, the rungs are a generic ladder around the current weight rather than
- * an exact stack — enough to place it, not to claim it's the real machine's numbers.
+ * [weightKg], drawn lightest at the top and heaviest at the bottom as on a real stack. A pin marks
+ * the current weight; that plate and the lighter ones stacked above it (the part of the stack
+ * actually lifted together) are shaded as engaged, while the heavier plates left resting below
+ * stay outlined. When [levelsKg] is given (the exercise has a real [WeightStack] assigned), the
+ * rungs are a window of its actual levels containing [weightKg], clamped to [STACK_RUNG_COUNT] —
+ * an accurate picture of the real machine, so every rung is labeled with its weight, not just the
+ * pinned one. If [weightKg] is near the top or bottom of the stack, the window (and the pin's
+ * position within it) shifts toward whichever end has fewer levels rather than padding the
+ * shortfall with fictional ones, so every rung shown is always a real level — the pin just isn't
+ * centered in that case. Otherwise (no stack assigned) the rungs are a generic ladder spaced by
+ * [incrementKg], always centered on the pin — enough to place it, not to claim it's the real
+ * machine's numbers, so only the pinned rung is labeled. If [weightKg] itself isn't one of
+ * [levelsKg] (e.g. it was set before the stack was assigned, or the stack was edited since), the
+ * pin sits on the next smaller level instead — the highest one the machine could actually be set
+ * to without exceeding [weightKg] — or the lowest level if [weightKg] is below all of them; in
+ * that case the pin is also annotated with "+X KG", the gap still owed on top of that level to
+ * reach [weightKg], so the mismatch is visible rather than silently rounded away.
  */
 @Composable
-private fun StackBreakdownRow(weightKg: Double, incrementKg: Double, modifier: Modifier = Modifier) {
-    val step = if (incrementKg > 0.0) incrementKg else 1.0
-    val pinIndex = STACK_RUNG_COUNT / 2 // 0 = top/lightest rung, engaged plates are index <= pinIndex
-    val weights = (0 until STACK_RUNG_COUNT).map { index -> weightKg + (index - pinIndex) * step }
+private fun StackBreakdownRow(
+    weightKg: Double,
+    incrementKg: Double,
+    levelsKg: List<Double>?,
+    modifier: Modifier = Modifier,
+) {
+    val centeredPinIndex = STACK_RUNG_COUNT / 2 // 0 = top/lightest rung
+    val isRealStack = !levelsKg.isNullOrEmpty()
+    val weights: List<Double>
+    val pinIndex: Int
+    var pinMismatchKg = 0.0
+    if (levelsKg.isNullOrEmpty()) {
+        val step = if (incrementKg > 0.0) incrementKg else 1.0
+        weights = (0 until STACK_RUNG_COUNT).map { index -> weightKg + (index - centeredPinIndex) * step }
+        pinIndex = centeredPinIndex
+    } else {
+        val sorted = levelsKg.sorted()
+        val currentIndex = sorted.indexOfLast { it <= weightKg }.takeIf { it >= 0 } ?: 0
+        // Center the window on currentIndex, then slide it back on-list if it would run past
+        // either end — this can only shrink the shortfall on one side by growing the other, never
+        // invent a level, since windowStart..windowEnd stays clamped to sorted.indices throughout.
+        val windowSize = minOf(STACK_RUNG_COUNT, sorted.size)
+        var windowStart = currentIndex - centeredPinIndex
+        windowStart = windowStart.coerceIn(0, sorted.size - windowSize)
+        weights = sorted.subList(windowStart, windowStart + windowSize)
+        pinIndex = currentIndex - windowStart
+        pinMismatchKg = weightKg - sorted[currentIndex]
+    }
 
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(3.dp),
         modifier = modifier,
     ) {
@@ -729,6 +823,8 @@ private fun StackBreakdownRow(weightKg: Double, incrementKg: Double, modifier: M
                 weightKg = rungWeightKg,
                 isPin = index == pinIndex,
                 isEngaged = index <= pinIndex,
+                showLabel = isRealStack,
+                mismatchKg = if (index == pinIndex) pinMismatchKg else 0.0,
             )
         }
     }
@@ -736,13 +832,23 @@ private fun StackBreakdownRow(weightKg: Double, incrementKg: Double, modifier: M
 
 /**
  * One rung of [StackBreakdownRow]'s stack: a rounded bar, filled solid when [isEngaged] (lifted
- * along with the pinned plate) or just outlined otherwise. Only the pinned rung — the current
- * weight — is labeled, with a sideways-T pin (a short rod capped by a rounded crossbar) drawn at
- * its right edge; the rest stay unlabeled, since they're a generic ladder rather than real stack
- * numbers (see [StackBreakdownRow]).
+ * along with the pinned plate) or just outlined otherwise. The pinned rung — the current weight —
+ * is always labeled, with a sideways-T pin (a short rod capped by a rounded crossbar) drawn at its
+ * right edge. The other rungs are labeled too when [showLabel] is set (a real [WeightStack] is
+ * assigned, so every number is one of the machine's actual levels); otherwise they stay unlabeled,
+ * since they're a generic ladder rather than real stack numbers (see [StackBreakdownRow]). When
+ * [mismatchKg] is positive (the pinned rung isn't exactly the exercise's current weight), a small
+ * "+X KG" label is drawn after the pin, the gap still owed on top of this rung's weight.
  */
 @Composable
-private fun StackPlate(weightKg: Double, isPin: Boolean, isEngaged: Boolean, modifier: Modifier = Modifier) {
+private fun StackPlate(
+    weightKg: Double,
+    isPin: Boolean,
+    isEngaged: Boolean,
+    showLabel: Boolean,
+    mismatchKg: Double = 0.0,
+    modifier: Modifier = Modifier,
+) {
     val containerColor = when {
         isPin -> MaterialTheme.colorScheme.primary
         isEngaged -> SlateBlueContainer
@@ -753,8 +859,13 @@ private fun StackPlate(weightKg: Double, isPin: Boolean, isEngaged: Boolean, mod
     } else {
         Modifier.border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp))
     }
+    val labelColor = when {
+        isPin -> Color.White
+        isEngaged -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
-    Box(contentAlignment = Alignment.CenterEnd, modifier = modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -764,30 +875,38 @@ private fun StackPlate(weightKg: Double, isPin: Boolean, isEngaged: Boolean, mod
                 .background(containerColor)
                 .then(borderModifier),
         ) {
-            if (isPin) {
+            if (isPin || showLabel) {
                 Text(
                     text = formatWeightCompact(weightKg),
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    fontWeight = if (isPin) FontWeight.Bold else FontWeight.Normal,
+                    color = labelColor,
                 )
             }
         }
         if (isPin) {
             StackPin()
+            if (mismatchKg > 0.0) {
+                Text(
+                    text = "+${formatWeightCompact(mismatchKg)} KG",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
         }
     }
 }
 
 /**
  * The sideways-T pin marking the current weight on [StackBreakdownRow]: a short rod, colored the
- * same as the barbell's bar (see [BarbellSideView]'s sleeve), sitting right at the selected
- * plate's edge (not overlapping its face) and capped by a rounded vertical crossbar colored
- * [PlateYellow15] as on a real selector pin.
+ * same as the barbell's bar (see [BarbellSideView]'s sleeve), starting right at the selected
+ * plate's trailing edge (not overlapping its face) and capped by a rounded vertical crossbar
+ * colored [PlateYellow15] as on a real selector pin.
  */
 @Composable
 private fun StackPin(modifier: Modifier = Modifier) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.offset(x = 8.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Box(
             modifier = Modifier
                 .width(8.dp)

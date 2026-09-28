@@ -11,6 +11,7 @@ data class DraftExercise(
     val reps: List<Int>,
     val weightKg: Double,
     val weightIncrementKg: Double,
+    val weightStackId: String? = null,
     val restSeconds: Int = Exercise.DEFAULT_REST_SECONDS,
 )
 

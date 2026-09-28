@@ -62,6 +62,7 @@ import com.akreutz.fitness.ui.profile.PlanEditorScreen
 import com.akreutz.fitness.ui.profile.ProfileScreen
 import com.akreutz.fitness.ui.profile.ProfileViewModel
 import com.akreutz.fitness.ui.profile.ProfileViewModelFactory
+import com.akreutz.fitness.ui.profile.WeightStacksScreen
 import com.akreutz.fitness.ui.progress.ProgressScreen
 import com.akreutz.fitness.ui.progress.ProgressViewModel
 import com.akreutz.fitness.ui.progress.ProgressViewModelFactory
@@ -158,6 +159,7 @@ private const val ROUTE_SESSION = "session/{workoutId}"
 private const val ARG_WORKOUT_ID = "workoutId"
 private const val ROUTE_PLAN_EDITOR = "plan-editor/{trainingPlanId}"
 private const val ARG_TRAINING_PLAN_ID = "trainingPlanId"
+private const val ROUTE_WEIGHT_STACKS = "weight-stacks"
 
 @Composable
 fun FitnessApp(
@@ -181,6 +183,7 @@ fun FitnessApp(
                 trainingPlanRepository = trainingPlanRepository,
                 application = application,
                 onEditPlan = { trainingPlanId -> navController.navigate("plan-editor/$trainingPlanId") },
+                onEditWeightStacks = { navController.navigate(ROUTE_WEIGHT_STACKS) },
             )
         }
         composable(
@@ -207,6 +210,12 @@ fun FitnessApp(
                 onBack = { navController.popBackStack() },
             )
         }
+        composable(ROUTE_WEIGHT_STACKS) {
+            WeightStacksScreen(
+                repository = trainingPlanRepository,
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }
 
@@ -218,6 +227,7 @@ private fun HomeScreen(
     trainingPlanRepository: TrainingPlanRepository,
     application: FitnessApplication,
     onEditPlan: (trainingPlanId: String) -> Unit,
+    onEditWeightStacks: () -> Unit,
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
     var showCreatePlan by rememberSaveable { mutableStateOf(false) }
@@ -318,6 +328,7 @@ private fun HomeScreen(
                         onEditPlan = onEditPlan,
                         onDeletePlan = profileViewModel::deletePlan,
                         onCreatePlan = { showCreatePlan = true },
+                        onEditWeightStacks = onEditWeightStacks,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

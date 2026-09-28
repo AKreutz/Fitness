@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,6 +52,7 @@ fun ProfileScreen(
     onEditPlan: (id: String) -> Unit,
     onDeletePlan: (plan: TrainingPlan) -> Unit,
     onCreatePlan: () -> Unit,
+    onEditWeightStacks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (uiState) {
@@ -85,6 +87,15 @@ fun ProfileScreen(
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Text("Create new plan")
+                    }
+                }
+                item {
+                    OutlinedButton(
+                        onClick = onEditWeightStacks,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.FitnessCenter, contentDescription = null)
+                        Text("Weight stacks")
                     }
                 }
             }
