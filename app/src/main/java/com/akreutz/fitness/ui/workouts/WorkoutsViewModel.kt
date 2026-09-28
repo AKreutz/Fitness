@@ -9,7 +9,8 @@ import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,24 +23,40 @@ sealed interface WorkoutHistoryUiState {
 
 class WorkoutsViewModel(private val repository: TrainingPlanRepository) : ViewModel() {
 
-    val workoutHistory: StateFlow<WorkoutHistoryUiState> = repository.observeWorkoutSessions()
-        .map { sessions ->
-            if (sessions.isEmpty()) {
-                WorkoutHistoryUiState.Empty
-            } else {
-                WorkoutHistoryUiState.Loaded(sessions)
-            }
+    /**
+     * Completed sessions, restricted to those logged against the *active* training plan's
+     * workouts — a session for a plan the user has since switched away from (or deleted) isn't
+     * shown here.
+     */
+    val workoutHistory: StateFlow<WorkoutHistoryUiState> = combine(
+        repository.observeWorkoutSessions(),
+        repository.observeActiveTrainingPlan(),
+    ) { sessions, activePlan ->
+        val activeWorkoutIds = activePlan?.workouts?.map { it.workout.id }?.toSet().orEmpty()
+        val sessionsForActivePlan = sessions.filter { it.workout.id in activeWorkoutIds }
+        if (sessionsForActivePlan.isEmpty()) {
+            WorkoutHistoryUiState.Empty
+        } else {
+            WorkoutHistoryUiState.Loaded(sessionsForActivePlan)
         }
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
             initialValue = WorkoutHistoryUiState.Loading,
         )
 
-    /** Deletes [session] from the completed-workout history. */
+    /**
+     * Deletes [session] from the completed-workout history, if it's still the active training
+     * plan's most recently completed session (see
+     * [TrainingPlanRepository.deleteWorkoutSession]) — the only one [WorkoutsScreen] ever offers
+     * this for.
+     */
     fun deleteWorkoutSession(session: WorkoutSession) {
         viewModelScope.launch {
-            repository.deleteWorkoutSession(session)
+            val activePlanId = repository.observeActiveTrainingPlan().first()?.trainingPlan?.id
+                ?: return@launch
+            repository.deleteWorkoutSession(session, activePlanId)
         }
     }
 }

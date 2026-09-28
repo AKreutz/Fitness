@@ -45,4 +45,18 @@ interface WorkoutSessionDao {
             "ORDER BY workout_sessions.completedAt DESC LIMIT 1",
     )
     fun observeLastFinishedWorkoutId(trainingPlanId: String): Flow<String?>
+
+    /**
+     * The id of the most recently completed session logged against any workout in
+     * [trainingPlanId], or `null` if none has been completed yet (or they've all since been
+     * deleted). Used to check a session is still that plan's latest before allowing it to be
+     * deleted (see [com.akreutz.fitness.data.repository.TrainingPlanRepository.deleteWorkoutSession]).
+     */
+    @Query(
+        "SELECT workout_sessions.id FROM workout_sessions " +
+            "JOIN workouts ON workouts.id = workout_sessions.workoutId " +
+            "WHERE workouts.trainingPlanId = :trainingPlanId " +
+            "ORDER BY workout_sessions.completedAt DESC LIMIT 1",
+    )
+    suspend fun getMostRecentSessionIdForTrainingPlan(trainingPlanId: String): String?
 }

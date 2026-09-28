@@ -48,21 +48,23 @@ class TrainingPlanRepository(
 
     /**
      * Deletes [session] from the completed-workout history, as a single transaction, but only if
-     * it's still the *most recently completed* session overall (across every workout) — undoing
-     * an older one could conflict with rating/weight changes a later session already made, so the
-     * workouts screen only ever offers this for the latest one. Also undoes that session's effect
-     * on each of its workout's exercises: the [ExercisePerformanceRecord] it recorded (keyed by
-     * [session]'s [WorkoutSession.completedAt]) is removed, and if a weight-increase
-     * offer was accepted for that exercise afterwards (see [setExerciseWeight]), its
-     * [Exercise.weightKg] is rolled back to the weight actually used in [session] — the removed
-     * entry's own [ExercisePerformanceEntry.weightKg], which is what the exercise was still at at
-     * the time of that offer.
+     * it's still the *most recently completed* session within [trainingPlanId] — undoing an older
+     * one could conflict with rating/weight changes a later session already made, so the workouts
+     * screen only ever offers this for the latest one. Checked per training plan, not overall,
+     * since a session for a different plan can never touch [session]'s workout's exercises (each
+     * exercise belongs to exactly one plan) and so can't conflict with it regardless of order.
+     * Also undoes that session's effect on each of its workout's exercises: the
+     * [ExercisePerformanceRecord] it recorded (keyed by [session]'s [WorkoutSession.completedAt])
+     * is removed, and if a weight-increase offer was accepted for that exercise afterwards (see
+     * [setExerciseWeight]), its [Exercise.weightKg] is rolled back to the weight actually used in
+     * [session] — the removed entry's own [ExercisePerformanceEntry.weightKg], which is what the
+     * exercise was still at at the time of that offer.
      */
-    suspend fun deleteWorkoutSession(session: WorkoutSession) {
+    suspend fun deleteWorkoutSession(session: WorkoutSession, trainingPlanId: String) {
         database.withTransaction {
-            val mostRecent = database.workoutSessionDao().observeAllMostRecentFirst().first()
-                .firstOrNull()?.session
-            if (mostRecent?.id != session.id) return@withTransaction
+            val mostRecentId = database.workoutSessionDao()
+                .getMostRecentSessionIdForTrainingPlan(trainingPlanId)
+            if (mostRecentId != session.id) return@withTransaction
 
             database.workoutSessionDao().delete(session)
             database.purgedIdDao().insert(listOf(PurgedId(id = session.id)))
