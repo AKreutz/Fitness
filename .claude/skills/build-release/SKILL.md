@@ -2,18 +2,17 @@
 name: build-release
 description: >
   Cuts a new release of the Fitness Android app: bumps the version in app/build.gradle.kts,
-  commits it to develop, fast-forward merges develop into main, builds a signed release AAB and
-  APK, and copies the artifacts into releases/vX.Y/. Use this whenever the user asks to "build a
-  release", "cut a release", "ship a release build", "bump the version and build", or similar for
-  this project — including when they just say "let's release" or ask for a signed AAB/APK to
-  upload to the Play Store.
+  commits it to develop, fast-forward merges develop into main, builds a signed release APK, and
+  copies it into releases/vX.Y/. Use this whenever the user asks to "build a release", "cut a
+  release", "ship a release build", "bump the version and build", or similar for this project —
+  including when they just say "let's release" or ask for a signed APK.
 ---
 
 # Build a release
 
 This is the release process for the Fitness app (an Android/Kotlin/Compose project). It takes the
-repo from "develop has the changes we want to ship" to "main is updated and there's a signed AAB/APK
-ready to upload," stopping right before anything gets pushed so the user can look things over.
+repo from "develop has the changes we want to ship" to "main is updated and there's a signed APK
+ready," stopping right before anything gets pushed so the user can look things over.
 
 Work through the steps below in order. Each one depends on the last succeeding, so don't skip ahead
 if something fails — stop and surface the problem instead of guessing at a fix.
@@ -63,29 +62,27 @@ Leave the user back on `develop` afterwards since that's the working branch. If 
 fails here despite the step 1 check (e.g. something changed in between), stop and report it rather
 than retrying with a different merge strategy.
 
-## 5. Build the signed release artifacts
+## 5. Build the signed release APK
 
 Confirm signing is configured before building — check that `local.properties` (at the repo root)
-has `release.storeFile` set. If it's missing, `assembleRelease`/`bundleRelease` will silently
-produce an *unsigned* artifact, which isn't what a release build means. Stop and ask the user to
-set up signing (see the README's "Release signing" section) rather than shipping unsigned output.
+has `release.storeFile` set. If it's missing, `assembleRelease` will silently produce an *unsigned*
+artifact, which isn't what a release build means. Stop and ask the user to set up signing (see the
+README's "Release signing" section) rather than shipping unsigned output.
 
 Once signing is confirmed, from the repo root:
 
 ```
-./gradlew.bat bundleRelease assembleRelease
+./gradlew.bat assembleRelease
 ```
 
-This produces both the AAB (for Play Store upload) and the APK (for sideloading/testing), matching
-the project's convention of building both. If the build fails, stop and report the Gradle error —
-don't attempt version or signing changes to work around a build failure without checking with the
-user first.
+This produces only the APK. Do not run `bundleRelease` and do not build the AAB — this process no
+longer produces one. If the build fails, stop and report the Gradle error — don't attempt version
+or signing changes to work around a build failure without checking with the user first.
 
-## 6. Copy artifacts into releases/
+## 6. Copy the artifact into releases/
 
 Create `releases/v<versionName>/` at the repo root if it doesn't exist, and copy:
 
-- `app/build/outputs/bundle/release/app-release.aab`
 - `app/build/outputs/apk/release/app-release.apk`
 
 into it. This folder is for local tracking across versions, not for committing — make sure
@@ -100,7 +97,7 @@ Summarize for the user:
 - Old version → new version (versionCode and versionName)
 - The commit made on develop
 - That main was fast-forwarded to match
-- Where the AAB and APK ended up
+- Where the APK ended up
 
 Then explicitly ask whether to push. If they say yes, push both branches:
 
