@@ -15,6 +15,7 @@ val localProperties = Properties().apply {
     }
 }
 val hasReleaseSigningConfig = localProperties.getProperty("release.storeFile") != null
+val hasDebugSigningConfig = localProperties.getProperty("debug.storeFile") != null
 
 android {
     namespace = "com.akreutz.fitness"
@@ -44,6 +45,17 @@ android {
     }
 
     signingConfigs {
+        // Optional: sign debug builds with a shared debug keystore (e.g. one kept on a synced
+        // drive) instead of the machine's default ~/.android/debug.keystore. Uses the standard
+        // Android debug credentials unless overridden in local.properties.
+        if (hasDebugSigningConfig) {
+            getByName("debug") {
+                storeFile = file(localProperties.getProperty("debug.storeFile"))
+                storePassword = localProperties.getProperty("debug.storePassword", "android")
+                keyAlias = localProperties.getProperty("debug.keyAlias", "androiddebugkey")
+                keyPassword = localProperties.getProperty("debug.keyPassword", "android")
+            }
+        }
         if (hasReleaseSigningConfig) {
             create("release") {
                 storeFile = file(localProperties.getProperty("release.storeFile"))

@@ -76,6 +76,21 @@ keytool -genkeypair -v -keystore release.keystore -alias <alias> -keyalg RSA -ke
 Release builds have R8 minification and resource shrinking enabled (`app/proguard-rules.pro` holds any
 project-specific keep rules).
 
+### Debug signing
+
+By default, debug builds are signed with the machine's `~/.android/debug.keystore`. To use a shared
+debug keystore instead (for example one kept on a synced drive, so every machine produces the same
+signing certificate), add this to `local.properties`:
+
+```properties
+debug.storeFile=G:/path/to/debug.keystore
+```
+
+The password and alias default to the standard Android debug values (`android` / `androiddebugkey`);
+override them with `debug.storePassword`, `debug.keyAlias` and `debug.keyPassword` if needed. In
+`.properties` files a single backslash is an escape character, so write paths with forward slashes or
+doubled backslashes.
+
 ## Requirements
 
 - Android Studio (current stable)
