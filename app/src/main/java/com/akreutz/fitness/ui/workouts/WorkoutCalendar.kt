@@ -150,17 +150,23 @@ private fun DayCell(
     onClick: (() -> Unit)?,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val border = when {
-        isSelected -> BorderStroke(2.dp, scheme.onSurface)
-        isToday -> BorderStroke(1.5.dp, scheme.primary)
+    val background = when {
+        isSelected -> scheme.primary
+        worked -> scheme.primaryContainer
         else -> null
     }
+    val contentColor = when {
+        isSelected -> scheme.onPrimary
+        worked -> scheme.onPrimaryContainer
+        else -> scheme.onSurface
+    }
+    val border = if (isToday && !isSelected) BorderStroke(1.5.dp, scheme.primary) else null
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .clip(CircleShape)
-            .then(if (worked) Modifier.background(scheme.primary) else Modifier)
+            .then(if (background != null) Modifier.background(background) else Modifier)
             .then(if (border != null) Modifier.border(border, CircleShape) else Modifier)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
@@ -169,7 +175,7 @@ private fun DayCell(
             text = day.toString(),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (worked) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (worked) scheme.onPrimary else scheme.onSurface,
+            color = contentColor,
         )
     }
 }

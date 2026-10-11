@@ -3,6 +3,7 @@ package com.akreutz.fitness.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 
 /**
  * The app's one and only theme: a deliberately-styled dark blue design, always applied. Every
@@ -12,15 +13,15 @@ import androidx.compose.runtime.Composable
 private val FitnessColorScheme = darkColorScheme(
     primary = AccentBlue,
     onPrimary = OnAccentBlue,
-    primaryContainer = AccentBlue,
-    onPrimaryContainer = OnAccentBlue,
+    primaryContainer = PrimaryContainerBlue,
+    onPrimaryContainer = OnPrimaryContainerBlue,
     inversePrimary = InversePrimaryBlue,
-    secondary = AccentBlue,
-    onSecondary = OnAccentBlue,
+    secondary = SecondarySlate,
+    onSecondary = OnSecondarySlate,
     secondaryContainer = SlateBlueContainer,
     onSecondaryContainer = OnSlateBlueContainer,
-    tertiary = AccentBlue,
-    onTertiary = OnAccentBlue,
+    tertiary = TertiaryTeal,
+    onTertiary = OnTertiaryTeal,
     tertiaryContainer = MutedTealContainer,
     onTertiaryContainer = OnMutedTealContainer,
     background = DarkBlueBackground,
@@ -48,9 +49,11 @@ private val FitnessColorScheme = darkColorScheme(
 
 @Composable
 fun FitnessTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = FitnessColorScheme,
-        typography = Typography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalEffortColors provides FitnessEffortColors) {
+        MaterialTheme(
+            colorScheme = FitnessColorScheme,
+            typography = Typography,
+            content = content,
+        )
+    }
 }

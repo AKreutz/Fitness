@@ -312,6 +312,8 @@ private fun HomeScreen(
                     text = { Text("Start workout") },
                     icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                     onClick = { homeViewModel.startNextWorkout() },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 )
             }
         },

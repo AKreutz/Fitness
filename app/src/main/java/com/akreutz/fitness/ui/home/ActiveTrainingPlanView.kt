@@ -30,9 +30,7 @@ import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
-import com.akreutz.fitness.ui.theme.PlateGreen10
-import com.akreutz.fitness.ui.theme.PlateRed
-import com.akreutz.fitness.ui.theme.PlateYellow15
+import com.akreutz.fitness.ui.theme.effortColors
 import java.util.Locale
 
 /**
@@ -167,12 +165,9 @@ private fun PerceivedEffortBar(effortLevel: PerceivedEffort?, modifier: Modifier
         PerceivedEffort.HARD -> 3
         null -> 0
     }
-    val filledColor = when (effortLevel) {
-        PerceivedEffort.EASY -> PlateGreen10
-        PerceivedEffort.MEDIUM -> PlateYellow15
-        PerceivedEffort.HARD -> PlateRed
-        null -> MaterialTheme.colorScheme.surfaceContainerHighest
-    }
+    val filledColor = effortLevel
+        ?.let { MaterialTheme.effortColors.forEffort(it) }
+        ?: MaterialTheme.colorScheme.surfaceContainerHighest
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
             modifier = Modifier

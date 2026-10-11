@@ -49,10 +49,7 @@ import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.performanceOn
-import com.akreutz.fitness.ui.theme.DarkBlueBackground
-import com.akreutz.fitness.ui.theme.PlateGreen10
-import com.akreutz.fitness.ui.theme.PlateRed
-import com.akreutz.fitness.ui.theme.PlateYellow15
+import com.akreutz.fitness.ui.theme.effortColors
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -177,7 +174,7 @@ private fun WorkoutHistory(
                 Text(
                     text = month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.ENGLISH)),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.padding(top = 8.dp, start = 4.dp),
                 )
             }
@@ -401,12 +398,12 @@ private fun ExerciseStatsRow(
 /** A small pill showing how hard an exercise felt, tinted by level. */
 @Composable
 private fun EffortBadge(effort: PerceivedEffort) {
-    val container: Color = when (effort) {
-        PerceivedEffort.EASY -> PlateGreen10
-        PerceivedEffort.MEDIUM -> PlateYellow15
-        PerceivedEffort.HARD -> PlateRed
-    }
-    Surface(shape = CircleShape, color = container, contentColor = DarkBlueBackground) {
+    val effortColors = MaterialTheme.effortColors
+    Surface(
+        shape = CircleShape,
+        color = effortColors.forEffort(effort),
+        contentColor = effortColors.onEffort,
+    ) {
         Text(
             text = effort.label,
             style = MaterialTheme.typography.labelMedium,

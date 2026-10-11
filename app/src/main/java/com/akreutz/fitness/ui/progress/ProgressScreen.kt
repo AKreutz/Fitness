@@ -21,6 +21,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,11 +43,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akreutz.fitness.data.model.PerceivedEffort
-import com.akreutz.fitness.ui.theme.AccentBlue
-import com.akreutz.fitness.ui.theme.OutlineVariantBlue
-import com.akreutz.fitness.ui.theme.PlateGreen10
-import com.akreutz.fitness.ui.theme.PlateRed
-import com.akreutz.fitness.ui.theme.PlateYellow15
+import com.akreutz.fitness.ui.theme.effortColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -96,6 +93,10 @@ fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
             val workouts = uiState.workouts.filter { it.exercises.isNotEmpty() }
             var selectedWorkoutId by rememberSaveable { mutableStateOf<String?>(null) }
             val selected = workouts.firstOrNull { it.workoutId == selectedWorkoutId }
+            val selectedChipColors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -108,6 +109,7 @@ fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
                                 selected = selected == null,
                                 onClick = { selectedWorkoutId = null },
                                 label = { Text("All") },
+                                colors = selectedChipColors,
                             )
                         }
                         items(workouts, key = { it.workoutId }) { workout ->
@@ -115,6 +117,7 @@ fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
                                 selected = selected?.workoutId == workout.workoutId,
                                 onClick = { selectedWorkoutId = workout.workoutId },
                                 label = { Text(workout.workoutName) },
+                                colors = selectedChipColors,
                             )
                         }
                     }
@@ -160,8 +163,8 @@ private fun WorkoutProgressSection(workout: WorkoutProgress, modifier: Modifier 
 /** Colors a change green when up, red when down and muted when flat. */
 @Composable
 private fun changeColor(change: Double): Color = when {
-    change > 0.0 -> PlateGreen10
-    change < 0.0 -> PlateRed
+    change > 0.0 -> MaterialTheme.effortColors.easy
+    change < 0.0 -> MaterialTheme.effortColors.hard
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
@@ -342,7 +345,7 @@ private fun EffortLegend(modifier: Modifier = Modifier) {
     ) {
         PerceivedEffort.entries.forEach { effort ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).background(effort.areaColor, CircleShape))
+                Box(modifier = Modifier.size(8.dp).background(MaterialTheme.effortColors.forEffort(effort), CircleShape))
                 Text(
                     text = effort.name.lowercase().replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.labelMedium,
@@ -352,14 +355,6 @@ private fun EffortLegend(modifier: Modifier = Modifier) {
         }
     }
 }
-
-/** Fill color for the area under a chart segment, by the [PerceivedEffort] it ended on. */
-private val PerceivedEffort.areaColor: Color
-    get() = when (this) {
-        PerceivedEffort.EASY -> PlateGreen10
-        PerceivedEffort.MEDIUM -> PlateYellow15
-        PerceivedEffort.HARD -> PlateRed
-    }
 
 /**
  * A single-series line chart of weight (kg) over time: a thin accent-colored line connecting each
@@ -371,13 +366,14 @@ private val PerceivedEffort.areaColor: Color
  */
 @Composable
 private fun WeightLineChart(dataPoints: List<WeightDataPoint>, modifier: Modifier = Modifier) {
+    val effortColors = MaterialTheme.effortColors
     LineChart(
         points = dataPoints.map {
             LineChartPoint(
                 completedAt = it.completedAt,
                 value = it.weightKg,
-                pointColor = it.perceivedEffort.areaColor,
-                fillColor = it.perceivedEffort.areaColor,
+                pointColor = effortColors.forEffort(it.perceivedEffort),
+                fillColor = effortColors.forEffort(it.perceivedEffort),
             )
         },
         formatValueLabel = { it.formatDecimal() },
@@ -395,13 +391,14 @@ private fun WeightLineChart(dataPoints: List<WeightDataPoint>, modifier: Modifie
  */
 @Composable
 private fun SummaryLineChart(dataPoints: List<SummaryDataPoint>, modifier: Modifier = Modifier) {
+    val effortColors = MaterialTheme.effortColors
     LineChart(
         points = dataPoints.map {
             LineChartPoint(
                 completedAt = it.completedAt,
                 value = it.summedPercentIncrease,
-                pointColor = it.averageEffort.areaColor,
-                fillColor = it.averageEffort.areaColor,
+                pointColor = effortColors.forEffort(it.averageEffort),
+                fillColor = effortColors.forEffort(it.averageEffort),
             )
         },
         formatValueLabel = { "${it.formatDecimal()}%" },
@@ -431,8 +428,9 @@ private fun LineChart(
     formatValueLabel: (Double) -> String,
     modifier: Modifier = Modifier,
 ) {
-    val lineColor = AccentBlue
-    val gridColor = OutlineVariantBlue
+    val lineColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val ringColor = MaterialTheme.colorScheme.onSurface
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = TextStyle(color = labelColor, fontSize = 11.sp)
@@ -514,7 +512,7 @@ private fun LineChart(
         }
         // The latest point gets a larger dot with a white ring, so the current value stands out.
         points.lastOrNull()?.let { last ->
-            drawCircle(color = Color.White, radius = 6.dp.toPx(), center = offsets.last())
+            drawCircle(color = ringColor, radius = 6.dp.toPx(), center = offsets.last())
             drawCircle(color = last.pointColor, radius = 4.dp.toPx(), center = offsets.last())
         }
 
