@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -52,6 +54,8 @@ fun ProfileScreen(
     onEditPlan: (id: String) -> Unit,
     onDeletePlan: (plan: TrainingPlan) -> Unit,
     onCreatePlan: () -> Unit,
+    onImportPlan: () -> Unit,
+    onExportPlan: (plan: TrainingPlan) -> Unit,
     onEditWeightStacks: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -77,6 +81,7 @@ fun ProfileScreen(
                             ?: 0,
                         onSelect = { onSelectPlan(plan.trainingPlan.id) },
                         onEdit = { onEditPlan(plan.trainingPlan.id) },
+                        onExport = { onExportPlan(plan.trainingPlan) },
                         onDeleteRequest = { planPendingDelete = plan },
                     )
                 }
@@ -87,6 +92,15 @@ fun ProfileScreen(
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                         Text("Create new plan")
+                    }
+                }
+                item {
+                    OutlinedButton(
+                        onClick = onImportPlan,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.FileDownload, contentDescription = null)
+                        Text("Import plan from file")
                     }
                 }
                 item {
@@ -139,6 +153,7 @@ private fun TrainingPlanCard(
     completedSessionCount: Int,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
+    onExport: () -> Unit,
     onDeleteRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -187,6 +202,13 @@ private fun TrainingPlanCard(
                 Icon(
                     imageVector = Icons.Filled.Edit,
                     contentDescription = "Edit \"${plan.trainingPlan.name}\"",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = onExport) {
+                Icon(
+                    imageVector = Icons.Filled.FileUpload,
+                    contentDescription = "Export \"${plan.trainingPlan.name}\"",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

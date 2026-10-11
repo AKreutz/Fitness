@@ -2,7 +2,9 @@ package com.akreutz.fitness
 
 import android.app.Activity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,11 +41,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -242,6 +246,37 @@ private fun HomeScreen(
         factory = ProgressViewModelFactory(trainingPlanRepository),
     )
 
+    val context = LocalContext.current
+    LaunchedEffect(profileViewModel) {
+        profileViewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
+    // The export JSON and plan name waiting for the user to pick where to save them.
+    var pendingExport by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        val export = pendingExport
+        pendingExport = null
+        if (uri == null || export == null) return@rememberLauncherForActivityResult
+        val (planName, json) = export
+        val written = runCatching {
+            context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(json.toByteArray()) }
+                ?: error("No output stream")
+        }
+        if (written.isSuccess) profileViewModel.reportExported(planName)
+        else profileViewModel.reportFileError()
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+                ?: error("No input stream")
+        }.getOrNull()
+        if (text == null) profileViewModel.reportFileError() else profileViewModel.importPlan(text)
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -328,6 +363,13 @@ private fun HomeScreen(
                         onEditPlan = onEditPlan,
                         onDeletePlan = profileViewModel::deletePlan,
                         onCreatePlan = { showCreatePlan = true },
+                        onImportPlan = { importLauncher.launch(arrayOf("*/*")) },
+                        onExportPlan = { plan ->
+                            profileViewModel.exportPlan(plan.id) { json ->
+                                pendingExport = plan.name to json
+                                exportLauncher.launch("${plan.name}.json")
+                            }
+                        },
                         onEditWeightStacks = onEditWeightStacks,
                         modifier = Modifier.padding(innerPadding),
                     )

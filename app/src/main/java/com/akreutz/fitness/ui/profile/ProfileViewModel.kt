@@ -7,10 +7,14 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.data.export.InvalidPlanExportException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -64,6 +68,42 @@ class ProfileViewModel(private val repository: TrainingPlanRepository) : ViewMod
         viewModelScope.launch {
             repository.deleteTrainingPlan(plan)
         }
+    }
+
+    private val _messages = Channel<String>(Channel.BUFFERED)
+
+    /** One-off, user-facing results of export/import (success or why it failed), to show once. */
+    val messages: Flow<String> = _messages.receiveAsFlow()
+
+    /** Serializes the plan with [id] and hands the JSON to [onReady], ready to be written out. */
+    fun exportPlan(id: String, onReady: (json: String) -> Unit) {
+        viewModelScope.launch {
+            val json = repository.exportTrainingPlan(id)
+            if (json == null) _messages.send("That plan no longer exists.") else onReady(json)
+        }
+    }
+
+    /** Creates a new plan from [json], the contents of a file produced by [exportPlan]. */
+    fun importPlan(json: String) {
+        viewModelScope.launch {
+            val message = try {
+                repository.importTrainingPlan(json)
+                "Plan imported."
+            } catch (e: InvalidPlanExportException) {
+                e.message ?: "Couldn't import this file."
+            }
+            _messages.send(message)
+        }
+    }
+
+    /** Reports a failure reading or writing the chosen file. */
+    fun reportFileError() {
+        _messages.trySend("Couldn't read or write the file.")
+    }
+
+    /** Reports that [name] was exported successfully. */
+    fun reportExported(name: String) {
+        _messages.trySend("Exported \"$name\".")
     }
 }
 

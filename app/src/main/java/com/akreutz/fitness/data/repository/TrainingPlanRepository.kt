@@ -2,6 +2,9 @@ package com.akreutz.fitness.data.repository
 
 import androidx.room.withTransaction
 import com.akreutz.fitness.data.db.FitnessDatabase
+import com.akreutz.fitness.data.export.InvalidPlanExportException
+import com.akreutz.fitness.data.export.PlanExportCodec
+import com.akreutz.fitness.data.export.PlanExportWeightStackDto
 import com.akreutz.fitness.data.model.DraftWorkout
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
@@ -133,6 +136,71 @@ class TrainingPlanRepository(
         }
         localChangeTracker.markDirty()
         activePlanPreferences.setActiveTrainingPlanId(trainingPlan.id)
+        return trainingPlan.id
+    }
+
+    /**
+     * Serializes the plan with [trainingPlanId] (workouts, exercises and any weight stacks they
+     * use, but no history) to the portable JSON format, or `null` if it doesn't exist.
+     */
+    suspend fun exportTrainingPlan(trainingPlanId: String): String? {
+        val plan = database.trainingPlanDao().observeById(trainingPlanId).first() ?: return null
+        return PlanExportCodec.encode(plan, database.weightStackDao().getAll())
+    }
+
+    /**
+     * Creates a new plan from [text], an export produced by [exportTrainingPlan], as a single
+     * transaction, always with fresh ids. Doesn't change the active plan. A cable exercise's
+     * weight stack is reused if an identical one (same name and levels) already exists, otherwise
+     * created. Returns the new plan's id; throws [InvalidPlanExportException] if [text] isn't a
+     * valid export.
+     */
+    suspend fun importTrainingPlan(text: String): String {
+        val export = PlanExportCodec.decode(text)
+        val trainingPlan = TrainingPlan(name = export.name)
+        database.withTransaction {
+            val knownStacks = database.weightStackDao().getAll().toMutableList()
+            suspend fun stackIdFor(dto: PlanExportWeightStackDto): String {
+                val levels = dto.levelsKg.sorted()
+                knownStacks.firstOrNull { it.name == dto.name && it.levelsKg == levels }
+                    ?.let { return it.id }
+                val stack = WeightStack(name = dto.name, levelsKg = levels)
+                database.weightStackDao().insert(stack)
+                knownStacks += stack
+                return stack.id
+            }
+
+            database.trainingPlanDao().insert(trainingPlan)
+            export.workouts.forEachIndexed { workoutIndex, workout ->
+                val workoutEntity = Workout(
+                    trainingPlanId = trainingPlan.id,
+                    name = workout.name,
+                    position = workoutIndex,
+                )
+                database.workoutDao().insert(workoutEntity)
+                workout.exercises.forEachIndexed { exerciseIndex, exercise ->
+                    val type = ExerciseType.valueOf(exercise.type)
+                    val stackId = exercise.weightStack
+                        ?.takeIf { type == ExerciseType.CABLE }
+                        ?.let { stackIdFor(it) }
+                    database.exerciseDao().insert(
+                        Exercise(
+                            workoutId = workoutEntity.id,
+                            name = exercise.name,
+                            type = type,
+                            sets = exercise.sets,
+                            reps = exercise.reps,
+                            weightKg = exercise.weightKg,
+                            weightIncrementKg = exercise.weightIncrementKg,
+                            weightStackId = stackId,
+                            restSeconds = exercise.restSeconds,
+                            position = exerciseIndex,
+                        ),
+                    )
+                }
+            }
+        }
+        localChangeTracker.markDirty()
         return trainingPlan.id
     }
 
