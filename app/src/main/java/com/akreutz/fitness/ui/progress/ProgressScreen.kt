@@ -1,23 +1,34 @@
 package com.akreutz.fitness.ui.progress
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -25,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -81,15 +93,39 @@ fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
                 }
                 return
             }
+            val workouts = uiState.workouts.filter { it.exercises.isNotEmpty() }
+            var selectedWorkoutId by rememberSaveable { mutableStateOf<String?>(null) }
+            val selected = workouts.firstOrNull { it.workoutId == selectedWorkoutId }
             LazyColumn(
                 modifier = modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                item {
-                    SummaryProgressSection(summary = uiState.summary)
+                item(key = "filters") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            FilterChip(
+                                selected = selected == null,
+                                onClick = { selectedWorkoutId = null },
+                                label = { Text("All") },
+                            )
+                        }
+                        items(workouts, key = { it.workoutId }) { workout ->
+                            FilterChip(
+                                selected = selected?.workoutId == workout.workoutId,
+                                onClick = { selectedWorkoutId = workout.workoutId },
+                                label = { Text(workout.workoutName) },
+                            )
+                        }
+                    }
                 }
-                items(uiState.workouts, key = { it.workoutId }) { workout ->
+                if (selected == null) {
+                    item(key = "summary") { SummaryProgressCard(summary = uiState.summary) }
+                }
+                items(
+                    if (selected == null) workouts else listOf(selected),
+                    key = { it.workoutId },
+                ) { workout ->
                     WorkoutProgressSection(workout = workout)
                 }
             }
@@ -100,34 +136,94 @@ fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
 @Composable
 private fun WorkoutProgressSection(workout: WorkoutProgress, modifier: Modifier = Modifier) {
     if (workout.exercises.isEmpty()) return
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(text = workout.workoutName, style = MaterialTheme.typography.titleLarge)
-        HorizontalDivider()
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp, end = 4.dp, top = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(text = workout.workoutName, style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = if (workout.exercises.size == 1) "1 exercise" else "${workout.exercises.size} exercises",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         workout.exercises.forEach { exercise ->
             ExerciseChartCard(exercise = exercise)
         }
     }
 }
 
+/** Colors a change green when up, red when down and muted when flat. */
+@Composable
+private fun changeColor(change: Double): Color = when {
+    change > 0.0 -> PlateGreen10
+    change < 0.0 -> PlateRed
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
 @Composable
 private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = Modifier) {
+    val first = exercise.dataPoints.firstOrNull()
+    val latest = exercise.dataPoints.lastOrNull()
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
-        elevation = CardDefaults.elevatedCardElevation(),
+        shape = MaterialTheme.shapes.large,
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(text = exercise.exerciseName, style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    text = exercise.exerciseName,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
+                )
+                if (latest != null && first != null) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "${latest.weightKg.formatDecimal()} kg",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (exercise.dataPoints.size < 2) {
+                            Text(
+                                text = "First session logged",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            val diff = latest.weightKg - first.weightKg
+                            val percent = if (first.weightKg > 0.0) diff / first.weightKg * 100.0 else 0.0
+                            Text(
+                                text = "${diff.formatSigned()} kg · ${percent.formatSigned()}%",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = changeColor(diff),
+                            )
+                        }
+                    }
+                }
+            }
             if (exercise.dataPoints.size < 2) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
+                        .height(96.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -160,46 +256,98 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
  * two sessions to plot.
  */
 @Composable
-private fun SummaryProgressSection(summary: List<SummaryDataPoint>, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(text = "Overall progress", style = MaterialTheme.typography.titleLarge)
-        HorizontalDivider()
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            ),
-            elevation = CardDefaults.elevatedCardElevation(),
+private fun SummaryProgressCard(summary: List<SummaryDataPoint>, modifier: Modifier = Modifier) {
+    val latest = summary.lastOrNull()
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "Summed % weight increase per session",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                if (summary.size < 2) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "Not enough data yet",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            Text(
+                text = "Overall progress",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (latest != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${latest.summedPercentIncrease.formatSigned()}%",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (summary.size >= 2) {
+                        val delta = latest.summedPercentIncrease - summary[summary.size - 2].summedPercentIncrease
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                            Text(
+                                text = "${delta.formatSigned()}% last session",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = changeColor(delta),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                            )
+                        }
                     }
-                } else {
-                    SummaryLineChart(
-                        dataPoints = summary,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(160.dp),
+                }
+            }
+            Text(
+                text = "Summed weight increase across all exercises",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            if (summary.size < 2) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(96.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Not enough data yet",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            } else {
+                SummaryLineChart(
+                    dataPoints = summary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp),
+                )
+                EffortLegend(modifier = Modifier.padding(top = 10.dp))
+            }
+        }
+    }
+}
+
+/** Explains the green/yellow/red chart colors: how the session felt. */
+@Composable
+private fun EffortLegend(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PerceivedEffort.entries.forEach { effort ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(8.dp).background(effort.areaColor, CircleShape))
+                Text(
+                    text = effort.name.lowercase().replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -362,7 +510,12 @@ private fun LineChart(
         // Marker dots, colored by their own point rather than the line's accent color, so a
         // point's status is visible even where the preceding segment's fill doesn't reach.
         offsets.forEachIndexed { index, offset ->
-            drawCircle(color = points[index].pointColor, radius = 3.dp.toPx(), center = offset)
+            drawCircle(color = points[index].pointColor, radius = 3.5.dp.toPx(), center = offset)
+        }
+        // The latest point gets a larger dot with a white ring, so the current value stands out.
+        points.lastOrNull()?.let { last ->
+            drawCircle(color = Color.White, radius = 6.dp.toPx(), center = offsets.last())
+            drawCircle(color = last.pointColor, radius = 4.dp.toPx(), center = offsets.last())
         }
 
         // First/last dates on the x-axis.
@@ -381,6 +534,10 @@ private fun LineChart(
         )
     }
 }
+
+/** Like [formatDecimal], but with an explicit "+" for positive values (e.g. "+12.5"). */
+private fun Double.formatSigned(): String =
+    if (this > 0.0) "+${formatDecimal()}" else formatDecimal()
 
 /** Formats a decimal value, trimming a trailing ".0" (e.g. "42.5" or "40"). */
 private fun Double.formatDecimal(): String =
