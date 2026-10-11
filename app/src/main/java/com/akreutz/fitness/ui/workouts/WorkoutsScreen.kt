@@ -10,18 +10,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,29 +39,42 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.performanceOn
+import com.akreutz.fitness.ui.theme.DarkBlueBackground
+import com.akreutz.fitness.ui.theme.PlateGreen10
+import com.akreutz.fitness.ui.theme.PlateRed
+import com.akreutz.fitness.ui.theme.PlateYellow15
 import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.temporal.WeekFields
+import java.util.Locale
 
 /**
  * A getter rather than a cached value, so it picks up the default locale fresh each time it's
  * used instead of freezing it at class-init time (the locale can change while the app is
  * running).
  */
-private val sessionDateTimeFormatter: DateTimeFormatter
-    get() = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+private val sessionTimeFormatter: DateTimeFormatter
+    get() = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.ENGLISH)
 
 /**
- * Lists every completed [com.akreutz.fitness.data.model.WorkoutSession], most recent first, each
- * as a card with the workout's name, when it was completed, and how long it took. Tapping a card
- * expands it in place to show that session's per-exercise stats.
+ * The workout history: a summary of recent activity, a month calendar marking training days (tap
+ * one to show only that day's sessions), and every completed
+ * [com.akreutz.fitness.data.model.WorkoutSession] grouped by month, most recent first. Tapping a
+ * card expands it in place to show that session's per-exercise stats.
  *
  * Deleting the most recent session is offered elsewhere (in the screen's header, since this list
  * can grow long) — see [WorkoutsDeleteLastButton] and [WorkoutsDeleteLastConfirmationDialog].
@@ -71,24 +91,146 @@ fun WorkoutsScreen(
             }
         }
         is WorkoutHistoryUiState.Empty -> {
-            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(72.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.FitnessCenter,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
+                }
+                Text(text = "No workouts yet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "No workouts completed yet",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = "Complete a workout and it will show up here.",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                 )
             }
         }
-        is WorkoutHistoryUiState.Loaded -> {
-            LazyColumn(
-                modifier = modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                itemsIndexed(uiState.sessions, key = { _, it -> it.session.id }) { _, session ->
-                    WorkoutSessionCard(session = session)
-                }
+        is WorkoutHistoryUiState.Loaded -> WorkoutHistory(uiState.sessions, modifier)
+    }
+}
+
+@Composable
+private fun WorkoutHistory(
+    sessions: List<WorkoutSessionWithWorkout>,
+    modifier: Modifier = Modifier,
+) {
+    val zone = ZoneId.systemDefault()
+    var selectedEpochDay by rememberSaveable { mutableStateOf<Long?>(null) }
+    val selectedDay = selectedEpochDay?.let(LocalDate::ofEpochDay)
+
+    val datedSessions = remember(sessions) {
+        sessions.map { it to it.session.startedAt.atZone(zone).toLocalDate() }
+    }
+    val workoutDays = remember(datedSessions) { datedSessions.map { it.second }.toSet() }
+    val groups = remember(datedSessions, selectedDay) {
+        datedSessions
+            .filter { selectedDay == null || it.second == selectedDay }
+            .groupBy { YearMonth.from(it.second) }
+            .toList()
+    }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item(key = "stats") { WorkoutStatsRow(workoutDays = workoutDays, total = sessions.size) }
+        item(key = "calendar") {
+            WorkoutCalendar(
+                workoutDays = workoutDays,
+                selectedDay = selectedDay,
+                onDaySelected = { selectedEpochDay = it?.toEpochDay() },
+            )
+        }
+        if (selectedDay != null) {
+            item(key = "filter") {
+                InputChip(
+                    selected = true,
+                    onClick = { selectedEpochDay = null },
+                    label = { Text(selectedDay.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.ENGLISH))) },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Clear date filter",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                )
             }
+        }
+        groups.forEach { (month, entries) ->
+            item(key = "header-$month") {
+                Text(
+                    text = month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.ENGLISH)),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                )
+            }
+            items(entries, key = { it.first.session.id }) { (session, _) ->
+                WorkoutSessionCard(session = session)
+            }
+        }
+    }
+}
+
+/** Three at-a-glance tiles: training days this week and this month, and sessions overall. */
+@Composable
+private fun WorkoutStatsRow(
+    workoutDays: Set<LocalDate>,
+    total: Int,
+    modifier: Modifier = Modifier,
+) {
+    val today = LocalDate.now()
+    val weekFields = WeekFields.of(LocalConfiguration.current.locales[0])
+    val thisWeek = workoutDays.count {
+        it.get(weekFields.weekBasedYear()) == today.get(weekFields.weekBasedYear()) &&
+            it.get(weekFields.weekOfWeekBasedYear()) == today.get(weekFields.weekOfWeekBasedYear())
+    }
+    val thisMonth = workoutDays.count { YearMonth.from(it) == YearMonth.from(today) }
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        StatTile("This week", thisWeek.toString(), Modifier.weight(1f))
+        StatTile("This month", thisMonth.toString(), Modifier.weight(1f))
+        StatTile("All time", total.toString(), Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -147,63 +289,72 @@ private fun WorkoutSessionCard(
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable(session.session.id) { mutableStateOf(false) }
+    val startedAt = session.session.startedAt.atZone(ZoneId.systemDefault())
+    val exerciseCount = session.exercises.size
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .animateContentSize(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
-        elevation = CardDefaults.elevatedCardElevation(),
+        shape = MaterialTheme.shapes.large,
     ) {
         Column(
             modifier = Modifier
                 .clickable { expanded = !expanded }
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(14.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = session.workout.name,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ) {
+                    Column(
+                        modifier = Modifier.width(52.dp).padding(vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = startedAt.format(DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        Text(
+                            text = startedAt.dayOfMonth.toString(),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(text = session.workout.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = listOf(
+                            startedAt.format(sessionTimeFormatter),
+                            session.session.durationSeconds.formatDuration(),
+                            if (exerciseCount == 1) "1 exercise" else "$exerciseCount exercises",
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = session.session.startedAt
-                        .atZone(ZoneId.systemDefault())
-                        .format(sessionDateTimeFormatter),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "•",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = session.session.durationSeconds.formatDuration(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (expanded) {
-                HorizontalDivider(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     session.exercises.forEach { exercise ->
                         ExerciseStatsRow(exercise = exercise, sessionCompletedAt = session.session.completedAt)
                     }
@@ -222,19 +373,21 @@ private fun ExerciseStatsRow(
     val entry = exercise.performanceOn(sessionCompletedAt)
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = exercise.exercise.name,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
         )
         if (entry != null) {
             Text(
-                text = "${entry.weightKg.formatWeight()} kg • ${entry.perceivedEffort.label}",
+                text = "${entry.weightKg.formatWeight()} kg",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
             )
+            EffortBadge(entry.perceivedEffort)
         } else {
             Text(
                 text = "No stats recorded",
@@ -245,12 +398,29 @@ private fun ExerciseStatsRow(
     }
 }
 
+/** A small pill showing how hard an exercise felt, tinted by level. */
+@Composable
+private fun EffortBadge(effort: PerceivedEffort) {
+    val container: Color = when (effort) {
+        PerceivedEffort.EASY -> PlateGreen10
+        PerceivedEffort.MEDIUM -> PlateYellow15
+        PerceivedEffort.HARD -> PlateRed
+    }
+    Surface(shape = CircleShape, color = container, contentColor = DarkBlueBackground) {
+        Text(
+            text = effort.label,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+        )
+    }
+}
+
 /** Display label for a [PerceivedEffort] level. */
 private val PerceivedEffort.label: String
     get() = when (this) {
-        PerceivedEffort.EASY -> "Easy effort"
-        PerceivedEffort.MEDIUM -> "Medium effort"
-        PerceivedEffort.HARD -> "Hard effort"
+        PerceivedEffort.EASY -> "Easy"
+        PerceivedEffort.MEDIUM -> "Medium"
+        PerceivedEffort.HARD -> "Hard"
     }
 
 /** Formats a weight in kg, trimming a trailing ".0" (e.g. "42.5" or "40"). */
