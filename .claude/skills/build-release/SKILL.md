@@ -115,6 +115,14 @@ this release build on their physical phone. Unlike day-to-day dev/debug testing 
 which is emulator-only — a finished, signed release build is exactly what the phone is for, so
 installing it there is fine.
 
+The phone is used over Wi-Fi debugging (phone IP `192.168.178.21`), so it shows up in `adb devices`
+as `192.168.178.21:<port>` rather than a USB serial. The port changes whenever Wireless debugging is
+toggled or the phone rejoins the network, so if the phone isn't listed, find the current port with
+`adb mdns services` (look for `_adb-tls-connect` on 192.168.178.21) and run
+`adb connect 192.168.178.21:<port>`. Some mDNS entries are stale and refuse the connection — try the
+others. If it asks for pairing, the user needs to supply the pairing IP:port and code from
+Developer options → Wireless debugging → "Pair device with pairing code".
+
 Check `adb devices` for a connected physical device (not an emulator, which shows as
 `emulator-####`). If one is connected:
 
