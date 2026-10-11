@@ -10,6 +10,7 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
 import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.ExerciseType
+import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
@@ -140,17 +141,26 @@ class TrainingPlanRepository(
     }
 
     /**
-     * Serializes the plan with [trainingPlanId] (workouts, exercises and any weight stacks they
-     * use, but no history) to the portable JSON format, or `null` if it doesn't exist.
+     * Serializes the plan with [trainingPlanId] (workouts, exercises, any weight stacks they use,
+     * and the completed-session and performance history) to the portable JSON format, or `null`
+     * if it doesn't exist.
      */
     suspend fun exportTrainingPlan(trainingPlanId: String): String? {
         val plan = database.trainingPlanDao().observeById(trainingPlanId).first() ?: return null
-        return PlanExportCodec.encode(plan, database.weightStackDao().getAll())
+        val sessionsByWorkoutId = plan.workouts.associate {
+            it.workout.id to database.workoutSessionDao().getForWorkout(it.workout.id)
+        }
+        return PlanExportCodec.encode(
+            plan,
+            database.weightStackDao().getAll(),
+            sessionsByWorkoutId,
+        )
     }
 
     /**
      * Creates a new plan from [text], an export produced by [exportTrainingPlan], as a single
-     * transaction, always with fresh ids. Doesn't change the active plan. A cable exercise's
+     * transaction, always with fresh ids, including its completed sessions and performance
+     * history. Doesn't change the active plan. A cable exercise's
      * weight stack is reused if an identical one (same name and levels) already exists, otherwise
      * created. Returns the new plan's id; throws [InvalidPlanExportException] if [text] isn't a
      * valid export.
@@ -178,25 +188,44 @@ class TrainingPlanRepository(
                     position = workoutIndex,
                 )
                 database.workoutDao().insert(workoutEntity)
+                workout.sessions.forEach { session ->
+                    database.workoutSessionDao().insert(
+                        WorkoutSession(
+                            workoutId = workoutEntity.id,
+                            startedAt = Instant.ofEpochMilli(session.startedAt),
+                            completedAt = Instant.ofEpochMilli(session.completedAt),
+                            durationSeconds = session.durationSeconds,
+                        ),
+                    )
+                }
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
                     val type = ExerciseType.valueOf(exercise.type)
                     val stackId = exercise.weightStack
                         ?.takeIf { type == ExerciseType.CABLE }
                         ?.let { stackIdFor(it) }
-                    database.exerciseDao().insert(
-                        Exercise(
-                            workoutId = workoutEntity.id,
-                            name = exercise.name,
-                            type = type,
-                            sets = exercise.sets,
-                            reps = exercise.reps,
-                            weightKg = exercise.weightKg,
-                            weightIncrementKg = exercise.weightIncrementKg,
-                            weightStackId = stackId,
-                            restSeconds = exercise.restSeconds,
-                            position = exerciseIndex,
-                        ),
+                    val exerciseEntity = Exercise(
+                        workoutId = workoutEntity.id,
+                        name = exercise.name,
+                        type = type,
+                        sets = exercise.sets,
+                        reps = exercise.reps,
+                        weightKg = exercise.weightKg,
+                        weightIncrementKg = exercise.weightIncrementKg,
+                        weightStackId = stackId,
+                        restSeconds = exercise.restSeconds,
+                        position = exerciseIndex,
                     )
+                    database.exerciseDao().insert(exerciseEntity)
+                    exercise.history.forEach { record ->
+                        database.exercisePerformanceRecordDao().insert(
+                            ExercisePerformanceRecord(
+                                exerciseId = exerciseEntity.id,
+                                completedAt = Instant.ofEpochMilli(record.completedAt),
+                                weightKg = record.weightKg,
+                                perceivedEffort = PerceivedEffort.valueOf(record.perceivedEffort),
+                            ),
+                        )
+                    }
                 }
             }
         }
