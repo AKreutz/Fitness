@@ -42,6 +42,7 @@ fun ConfirmDestructiveDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dialogEnter(),
         icon = icon?.let {
             {
                 Box(

@@ -9,6 +9,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -165,6 +178,42 @@ private const val ROUTE_PLAN_EDITOR = "plan-editor/{trainingPlanId}"
 private const val ARG_TRAINING_PLAN_ID = "trainingPlanId"
 private const val ROUTE_WEIGHT_STACKS = "weight-stacks"
 
+private const val TAB_TRANSITION_MILLIS = 250
+private const val SCREEN_TRANSITION_MILLIS = 300
+
+// Shared-axis (X) transitions between screens; the workout session slides up from the bottom
+// instead, since it covers the whole app rather than being a sibling of the screen it came from.
+private fun isSession(entry: NavBackStackEntry) = entry.destination.route == ROUTE_SESSION
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.screenEnter(): EnterTransition =
+    if (isSession(targetState)) {
+        slideInVertically(tween(SCREEN_TRANSITION_MILLIS)) { it } + fadeIn(tween(SCREEN_TRANSITION_MILLIS))
+    } else {
+        slideInHorizontally(tween(SCREEN_TRANSITION_MILLIS)) { it / 8 } + fadeIn(tween(SCREEN_TRANSITION_MILLIS))
+    }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.screenExit(): ExitTransition =
+    if (isSession(targetState)) {
+        // The session slides over this screen, so it only needs to fade out underneath.
+        fadeOut(tween(SCREEN_TRANSITION_MILLIS))
+    } else {
+        slideOutHorizontally(tween(SCREEN_TRANSITION_MILLIS)) { -it / 8 } + fadeOut(tween(SCREEN_TRANSITION_MILLIS))
+    }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.screenPopEnter(): EnterTransition =
+    if (isSession(initialState)) {
+        fadeIn(tween(SCREEN_TRANSITION_MILLIS))
+    } else {
+        slideInHorizontally(tween(SCREEN_TRANSITION_MILLIS)) { -it / 8 } + fadeIn(tween(SCREEN_TRANSITION_MILLIS))
+    }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.screenPopExit(): ExitTransition =
+    if (isSession(initialState)) {
+        slideOutVertically(tween(SCREEN_TRANSITION_MILLIS)) { it } + fadeOut(tween(SCREEN_TRANSITION_MILLIS))
+    } else {
+        slideOutHorizontally(tween(SCREEN_TRANSITION_MILLIS)) { it / 8 } + fadeOut(tween(SCREEN_TRANSITION_MILLIS))
+    }
+
 @Composable
 fun FitnessApp(
     trainingPlan: ActiveTrainingPlanUiState,
@@ -174,7 +223,14 @@ fun FitnessApp(
 ) {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = ROUTE_HOME) {
+    NavHost(
+        navController = navController,
+        startDestination = ROUTE_HOME,
+        enterTransition = { screenEnter() },
+        exitTransition = { screenExit() },
+        popEnterTransition = { screenPopEnter() },
+        popExitTransition = { screenPopExit() },
+    ) {
         composable(ROUTE_HOME) {
             LaunchedEffect(Unit) {
                 homeViewModel.startWorkoutEvents.collect { workoutId ->
@@ -318,70 +374,82 @@ private fun HomeScreen(
             }
         },
     ) { innerPadding ->
-        when (selectedDestination) {
-            0 -> ActiveTrainingPlanView(
-                workouts = (trainingPlan as? ActiveTrainingPlanUiState.Loaded)
-                    ?.workoutsNextFirst.orEmpty(),
-                modifier = Modifier.padding(innerPadding),
-            )
-            1 -> {
-                val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
-                WorkoutsScreen(
-                    uiState = workoutHistory,
+        AnimatedContent(
+            targetState = selectedDestination,
+            transitionSpec = {
+                val direction = if (targetState > initialState) 1 else -1
+                (slideInHorizontally(tween(TAB_TRANSITION_MILLIS)) { direction * it / 8 } +
+                    fadeIn(tween(TAB_TRANSITION_MILLIS))) togetherWith
+                    (slideOutHorizontally(tween(TAB_TRANSITION_MILLIS)) { -direction * it / 8 } +
+                        fadeOut(tween(TAB_TRANSITION_MILLIS)))
+            },
+            label = "tab",
+        ) { tab ->
+            when (tab) {
+                0 -> ActiveTrainingPlanView(
+                    workouts = (trainingPlan as? ActiveTrainingPlanUiState.Loaded)
+                        ?.workoutsNextFirst.orEmpty(),
                     modifier = Modifier.padding(innerPadding),
                 )
-                val deleteTarget = (workoutHistory as? WorkoutHistoryUiState.Loaded)
-                    ?.sessions?.firstOrNull()
-                if (deleteLastWorkoutPending && deleteTarget != null) {
-                    WorkoutsDeleteLastConfirmationDialog(
-                        session = deleteTarget,
-                        onConfirm = { session ->
-                            workoutsViewModel.deleteWorkoutSession(session)
-                            deleteLastWorkoutPending = false
-                        },
-                        onDismiss = { deleteLastWorkoutPending = false },
-                    )
-                }
-            }
-            2 -> {
-                val progressState by progressViewModel.uiState.collectAsState()
-                ProgressScreen(
-                    uiState = progressState,
-                    modifier = Modifier.padding(innerPadding),
-                )
-            }
-            3 -> {
-                if (showCreatePlan) {
-                    OnboardingScreen(
-                        repository = trainingPlanRepository,
-                        onFinished = { showCreatePlan = false },
-                        onCancel = { showCreatePlan = false },
+                1 -> {
+                    val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
+                    WorkoutsScreen(
+                        uiState = workoutHistory,
                         modifier = Modifier.padding(innerPadding),
                     )
-                } else {
-                    val profileState by profileViewModel.uiState.collectAsState()
-                    ProfileScreen(
-                        uiState = profileState,
-                        onSelectPlan = profileViewModel::selectPlan,
-                        onEditPlan = onEditPlan,
-                        onDeletePlan = profileViewModel::deletePlan,
-                        onCreatePlan = { showCreatePlan = true },
-                        onImportPlan = { importLauncher.launch(arrayOf("*/*")) },
-                        onExportPlan = { plan ->
-                            profileViewModel.exportPlan(plan.id) { json ->
-                                pendingExport = plan.name to json
-                                exportLauncher.launch("${plan.name}.json")
-                            }
-                        },
-                        onEditWeightStacks = onEditWeightStacks,
+                    val deleteTarget = (workoutHistory as? WorkoutHistoryUiState.Loaded)
+                        ?.sessions?.firstOrNull()
+                    if (deleteLastWorkoutPending && deleteTarget != null) {
+                        WorkoutsDeleteLastConfirmationDialog(
+                            session = deleteTarget,
+                            onConfirm = { session ->
+                                workoutsViewModel.deleteWorkoutSession(session)
+                                deleteLastWorkoutPending = false
+                            },
+                            onDismiss = { deleteLastWorkoutPending = false },
+                        )
+                    }
+                }
+                2 -> {
+                    val progressState by progressViewModel.uiState.collectAsState()
+                    ProgressScreen(
+                        uiState = progressState,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
+                3 -> {
+                    if (showCreatePlan) {
+                        OnboardingScreen(
+                            repository = trainingPlanRepository,
+                            onFinished = { showCreatePlan = false },
+                            onCancel = { showCreatePlan = false },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    } else {
+                        val profileState by profileViewModel.uiState.collectAsState()
+                        ProfileScreen(
+                            uiState = profileState,
+                            onSelectPlan = profileViewModel::selectPlan,
+                            onEditPlan = onEditPlan,
+                            onDeletePlan = profileViewModel::deletePlan,
+                            onCreatePlan = { showCreatePlan = true },
+                            onImportPlan = { importLauncher.launch(arrayOf("*/*")) },
+                            onExportPlan = { plan ->
+                                profileViewModel.exportPlan(plan.id) { json ->
+                                    pendingExport = plan.name to json
+                                    exportLauncher.launch("${plan.name}.json")
+                                }
+                            },
+                            onEditWeightStacks = onEditWeightStacks,
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    }
+                }
+                else -> PlaceholderScreen(
+                    destination = destinations[tab],
+                    modifier = Modifier.padding(innerPadding),
+                )
             }
-            else -> PlaceholderScreen(
-                destination = destinations[selectedDestination],
-                modifier = Modifier.padding(innerPadding),
-            )
         }
     }
 }

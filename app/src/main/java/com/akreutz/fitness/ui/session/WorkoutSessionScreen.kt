@@ -117,6 +117,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.FitnessApplication
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.common.dialogEnter
 import com.akreutz.fitness.ui.common.label
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
@@ -981,6 +982,7 @@ private fun WeightIncreaseOfferDialog(
 
     AlertDialog(
         onDismissRequest = {},
+        modifier = Modifier.dialogEnter(),
         title = { Text("Time to go heavier?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1629,6 +1631,21 @@ private fun RecoveryRow(
     // continuously instead of stepping.
     val progress by animateFloatAsState(target, tween(1000, easing = LinearEasing), label = "restProgress")
 
+    // Once the goal is reached the ring changes colour and gives a single pulse.
+    val goalReached = seconds >= goalSeconds
+    val ringColor by animateColorAsState(
+        targetValue = if (goalReached) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+        animationSpec = tween(400),
+        label = "restRingColor",
+    )
+    val pulse = remember { Animatable(1f) }
+    LaunchedEffect(goalReached) {
+        if (goalReached) {
+            pulse.animateTo(1.2f, tween(150))
+            pulse.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+        }
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -1638,7 +1655,14 @@ private fun RecoveryRow(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(14.dp),
     ) {
-        RestCountdownRing(progress = progress) {
+        RestCountdownRing(
+            progress = progress,
+            color = ringColor,
+            modifier = Modifier.graphicsLayer {
+                scaleX = pulse.value
+                scaleY = pulse.value
+            },
+        ) {
             Text(
                 text = String.format(Locale.US, "%d:%02d", minutes, remainingSeconds),
                 style = MaterialTheme.typography.labelLarge,
@@ -1664,11 +1688,12 @@ private fun RecoveryRow(
 @Composable
 private fun RestCountdownRing(
     progress: Float,
+    color: Color,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val trackColor = MaterialTheme.colorScheme.outlineVariant
-    val progressColor = MaterialTheme.colorScheme.primary
+    val progressColor = color
     Box(
         modifier = modifier.size(64.dp),
         contentAlignment = Alignment.Center,

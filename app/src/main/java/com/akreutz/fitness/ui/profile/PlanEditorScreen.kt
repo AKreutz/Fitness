@@ -59,6 +59,7 @@ import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.common.dialogEnter
 import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.DraggableListWithHandle
 import java.util.Locale
@@ -628,6 +629,7 @@ private fun WorkoutNameDialog(
     var name by remember { mutableStateOf(initialName) }
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dialogEnter(),
         title = { Text(title) },
         text = {
             OutlinedTextField(

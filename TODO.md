@@ -32,10 +32,10 @@
 
 Workout session screen: rest ring, set transitions, set-complete feedback, rolling numbers, plate animation and exercise switching are done.
 
-- [ ] Rest finished: pulse the rest ring and tint it with `animateColorAsState` once the goal time is reached
-- [ ] Screen transitions: shared-axis `NavHost` transitions, with the session screen sliding up from the bottom
-- [ ] Tab switching: crossfade or slide between the bottom-bar tabs and animate the nav indicator
-- [ ] Dialogs: scale and fade in
+- [x] Rest finished: pulse the rest ring and tint it with `animateColorAsState` once the goal time is reached
+- [x] Screen transitions: shared-axis `NavHost` transitions, with the session screen sliding up from the bottom
+- [x] Tab switching: crossfade or slide between the bottom-bar tabs and animate the nav indicator
+- [x] Dialogs: scale and fade in
 - [ ] List item animations: `Modifier.animateItem()` in the plan editor and history lists (add, remove, reorder)
 - [ ] Staggered entrance for the cards on Home and Profile on first load
 - [ ] Expand/collapse with `AnimatedVisibility` for the exercise chips and overflow menus

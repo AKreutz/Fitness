@@ -129,7 +129,7 @@ fun AddExerciseDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.dialogEnter().fillMaxSize(),
             topBar = {
                 TopAppBar(
                     navigationIcon = {

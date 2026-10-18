@@ -85,6 +85,7 @@ fun WeightStackDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.dialogEnter(),
         title = { Text(title) },
         text = {
             Column(
