@@ -56,6 +56,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,6 +76,7 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -309,6 +311,7 @@ private fun InProgressContent(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 56.dp)
                         .graphicsLayer {
                             scaleX = buttonScale.value
                             scaleY = buttonScale.value
@@ -332,19 +335,24 @@ private fun InProgressContent(
                     )
                 }
             }
-            if (state.currentSet.isWarmUp && state.remainingExercises.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = { switchPickerShown = true },
-                    modifier = Modifier.fillMaxWidth().pressScale(),
-                ) {
-                    Text("Switch exercise")
+            // Secondary actions share one row of low-emphasis buttons so "Next" is the only
+            // prominent control; Cancel is tinted since it discards the workout.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                if (state.currentSet.isWarmUp && state.remainingExercises.isNotEmpty()) {
+                    TextButton(
+                        onClick = { switchPickerShown = true },
+                        modifier = Modifier.weight(1f).pressScale(),
+                    ) {
+                        Text("Switch exercise")
+                    }
                 }
-            }
-            OutlinedButton(
-                onClick = { cancelConfirmationShown = true },
-                modifier = Modifier.fillMaxWidth().pressScale(),
-            ) {
-                Text("Cancel")
+                TextButton(
+                    onClick = { cancelConfirmationShown = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.weight(1f).pressScale(),
+                ) {
+                    Text("Cancel")
+                }
             }
         }
     }
