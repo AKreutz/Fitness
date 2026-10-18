@@ -427,6 +427,12 @@ class TrainingPlanRepository(
         localChangeTracker.markDirty()
     }
 
+    /** Renames [trainingPlan] to [name]. Used from the plan editor. */
+    suspend fun renameTrainingPlan(trainingPlan: TrainingPlan, name: String) {
+        database.trainingPlanDao().update(trainingPlan.copy(name = name, updatedAt = Instant.now()))
+        localChangeTracker.markDirty()
+    }
+
     /** Renames [workout] to [name]. Used from the plan editor. */
     suspend fun renameWorkout(workout: Workout, name: String) {
         database.workoutDao().update(workout.copy(name = name, updatedAt = Instant.now()))

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExerciseType
+import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
@@ -41,6 +42,10 @@ class PlanEditorViewModel(
             started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
             initialValue = PlanEditorUiState.Loading,
         )
+
+    fun renamePlan(plan: TrainingPlan, name: String) {
+        viewModelScope.launch { repository.renameTrainingPlan(plan, name) }
+    }
 
     fun renameWorkout(workout: Workout, name: String) {
         viewModelScope.launch { repository.renameWorkout(workout, name) }

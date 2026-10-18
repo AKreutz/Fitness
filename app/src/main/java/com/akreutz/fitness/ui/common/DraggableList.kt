@@ -1,6 +1,8 @@
 package com.akreutz.fitness.ui.common
 
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 
@@ -36,6 +39,37 @@ fun <T> DraggableList(
     modifier: Modifier = Modifier,
     itemContent: @Composable (index: Int, item: T) -> Unit,
 ) {
+    DraggableListWithHandle(
+        items = items,
+        onMove = onMove,
+        modifier = modifier,
+        rowSpacing = 0.dp,
+        itemContent = { index, item, handle ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                handle(Modifier.padding(end = 4.dp))
+                itemContent(index, item)
+            }
+        },
+    )
+}
+
+/**
+ * Like [DraggableList], but [itemContent] places the drag handle itself: it receives a `handle`
+ * composable (taking the modifier to apply to the handle icon) to put wherever suits the row,
+ * e.g. inside a card. Rows are separated by [rowSpacing].
+ */
+@Composable
+fun <T> DraggableListWithHandle(
+    items: List<T>,
+    onMove: (fromIndex: Int, toIndex: Int) -> Unit,
+    modifier: Modifier = Modifier,
+    rowSpacing: androidx.compose.ui.unit.Dp = 0.dp,
+    itemContent: @Composable (
+        index: Int,
+        item: T,
+        handle: @Composable (Modifier) -> Unit,
+    ) -> Unit,
+) {
     // The order shown while a drag is in progress, as a list of original `items` indices; kept in
     // sync with `items` otherwise, so reordering during a drag is instant instead of waiting for
     // the parent's state to round-trip.
@@ -45,11 +79,15 @@ fun <T> DraggableList(
     var dragOffsetY by remember { mutableStateOf(0f) }
     val rowHeightPx = remember { mutableStateMapOf<Int, Int>() }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    val spacingPx = with(LocalDensity.current) { rowSpacing.toPx() }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(rowSpacing),
+    ) {
         displayOrder.forEach { itemIndex ->
             val isDragged = itemIndex == draggedIndex
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onSizeChanged { rowHeightPx[itemIndex] = it.height }
@@ -58,12 +96,12 @@ fun <T> DraggableList(
                         translationY = if (isDragged) dragOffsetY else 0f
                     },
             ) {
-                Icon(
+                val handle: @Composable (Modifier) -> Unit = { handleModifier ->
+                    Icon(
                     imageVector = Icons.Filled.DragHandle,
                     contentDescription = "Drag to reorder",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(end = 4.dp)
+                    modifier = handleModifier
                         .pointerInput(items) {
                             detectDragGestures(
                                 onDragStart = {
@@ -94,18 +132,19 @@ fun <T> DraggableList(
                                         displayOrder = displayOrder.toMutableList().apply {
                                             add(position + 1, removeAt(position))
                                         }
-                                        dragOffsetY -= rowHeight
+                                        dragOffsetY -= rowHeight + spacingPx
                                     } else if (dragOffsetY < -threshold && position > 0) {
                                         displayOrder = displayOrder.toMutableList().apply {
                                             add(position - 1, removeAt(position))
                                         }
-                                        dragOffsetY += rowHeight
+                                        dragOffsetY += rowHeight + spacingPx
                                     }
                                 },
                             )
                         },
-                )
-                itemContent(itemIndex, items[itemIndex])
+                    )
+                }
+                itemContent(itemIndex, items[itemIndex], handle)
             }
         }
     }
