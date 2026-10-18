@@ -1,6 +1,10 @@
 package com.akreutz.fitness.ui.profile
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +28,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.akreutz.fitness.ui.common.ShimmerPlaceholderList
+import com.akreutz.fitness.ui.common.pressScale
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.data.model.DraftExercise
 import com.akreutz.fitness.data.model.Exercise
@@ -165,14 +170,10 @@ fun PlanEditorScreen(
     ) { innerPadding ->
         when (val state = uiState) {
             is PlanEditorUiState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+                ShimmerPlaceholderList(
+                    heights = listOf(96.dp, 96.dp, 96.dp),
+                    modifier = Modifier.padding(innerPadding),
+                )
             }
             is PlanEditorUiState.NotFound -> {
                 Box(
@@ -261,6 +262,7 @@ private fun PlanEditorContent(
                 items = plan.workouts,
                 onMove = { fromIndex, toIndex -> onMoveWorkout(workouts, fromIndex, toIndex) },
                 rowSpacing = 12.dp,
+                itemKey = { it.workout.id },
             ) { _, workoutWithExercises, handle ->
                 WorkoutEditorCard(
                     workout = workoutWithExercises.workout,
@@ -421,8 +423,7 @@ private fun WorkoutEditorCard(
 
     Card(
         modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize(),
+            .fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -449,7 +450,7 @@ private fun WorkoutEditorCard(
                         color = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.padding(top = 2.dp),
                     )
-                    if (!expanded && exercises.isNotEmpty()) {
+                    AnimatedVisibility(visible = !expanded && exercises.isNotEmpty()) {
                         Text(
                             text = exercises.joinToString(", ") { it.name },
                             style = MaterialTheme.typography.bodySmall,
@@ -475,66 +476,74 @@ private fun WorkoutEditorCard(
                     )
                 }
             }
-            if (expanded) {
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    modifier = Modifier.padding(top = 4.dp, end = 4.dp),
-                )
-                DraggableListWithHandle(
-                    items = exercises,
-                    onMove = { fromIndex, toIndex -> onMoveExercise(exercises, fromIndex, toIndex) },
-                ) { _, exercise, handle ->
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onExerciseClick(exercise) }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            handle(Modifier.padding(horizontal = 6.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = exercise.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.padding(top = 6.dp),
-                                ) {
-                                    StatChip("${exercise.sets} sets · ${RepScheme.format(exercise.reps)} reps")
-                                    StatChip("${formatKg(exercise.weightKg)} kg")
-                                    StatChip(
-                                        "+${formatKg(exercise.weightIncrementKg)} kg / session",
-                                        accent = true,
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                Column {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        modifier = Modifier.padding(top = 4.dp, end = 4.dp),
+                    )
+                    DraggableListWithHandle(
+                        items = exercises,
+                        onMove = { fromIndex, toIndex -> onMoveExercise(exercises, fromIndex, toIndex) },
+                        itemKey = { it.id },
+                    ) { _, exercise, handle ->
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onExerciseClick(exercise) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                handle(Modifier.padding(horizontal = 6.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = exercise.name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium,
                                     )
-                                    StatChip(formatRest(exercise.restSeconds) + " rest")
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.padding(top = 6.dp),
+                                    ) {
+                                        StatChip("${exercise.sets} sets · ${RepScheme.format(exercise.reps)} reps")
+                                        StatChip("${formatKg(exercise.weightKg)} kg")
+                                        StatChip(
+                                            "+${formatKg(exercise.weightIncrementKg)} kg / session",
+                                            accent = true,
+                                        )
+                                        StatChip(formatRest(exercise.restSeconds) + " rest")
+                                    }
                                 }
+                                EditorMenuButton(
+                                    contentDescription = "Actions for \"${exercise.name}\"",
+                                    editLabel = "Edit",
+                                    deleteLabel = "Delete exercise",
+                                    onEdit = { onExerciseClick(exercise) },
+                                    onDeleteRequest = { onExerciseDeleteRequest(exercise) },
+                                )
                             }
-                            EditorMenuButton(
-                                contentDescription = "Actions for \"${exercise.name}\"",
-                                editLabel = "Edit",
-                                deleteLabel = "Delete exercise",
-                                onEdit = { onExerciseClick(exercise) },
-                                onDeleteRequest = { onExerciseDeleteRequest(exercise) },
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                                modifier = Modifier.padding(end = 4.dp),
                             )
                         }
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            modifier = Modifier.padding(end = 4.dp),
-                        )
                     }
-                }
-                FilledTonalButton(
-                    onClick = onAddExercise,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, end = 4.dp, top = 8.dp),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("Add exercise", modifier = Modifier.padding(start = 8.dp))
+                    FilledTonalButton(
+                        onClick = onAddExercise,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 4.dp, top = 8.dp)
+                            .pressScale(),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text("Add exercise", modifier = Modifier.padding(start = 8.dp))
+                    }
                 }
             }
         }

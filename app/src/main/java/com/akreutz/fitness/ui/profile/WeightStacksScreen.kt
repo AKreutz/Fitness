@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.ui.common.WeightStackDialog
+import com.akreutz.fitness.ui.common.pressScale
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
@@ -83,6 +84,7 @@ fun WeightStacksScreen(
         ) {
             items(weightStacks, key = { it.id }) { stack ->
                 WeightStackCard(
+                    modifier = Modifier.animateItem(),
                     stack = stack,
                     onClick = { stackDialogTarget = stack },
                     onDeleteRequest = { stackPendingDelete = stack },
@@ -91,7 +93,7 @@ fun WeightStacksScreen(
             item {
                 OutlinedButton(
                     onClick = { showCreateDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().pressScale(),
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Text("Create new weight stack")
@@ -153,6 +155,7 @@ private fun WeightStackCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .pressScale()
             .clickable(onClick = onClick),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,

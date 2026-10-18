@@ -30,6 +30,7 @@ import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
+import com.akreutz.fitness.ui.common.staggeredEntrance
 import com.akreutz.fitness.ui.theme.effortColors
 import java.util.Locale
 
@@ -49,11 +50,13 @@ fun ActiveTrainingPlanView(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        itemsIndexed(workouts) { index, workout ->
-            if (index > 0) {
-                HorizontalDivider(modifier = Modifier.padding(bottom = 16.dp))
+        itemsIndexed(workouts, key = { _, workout -> workout.workout.id }) { index, workout ->
+            Column(modifier = Modifier.animateItem().staggeredEntrance("home", index)) {
+                if (index > 0) {
+                    HorizontalDivider(modifier = Modifier.padding(bottom = 16.dp))
+                }
+                WorkoutSection(workout = workout)
             }
-            WorkoutSection(workout = workout)
         }
     }
 }

@@ -1,6 +1,10 @@
 package com.akreutz.fitness.ui.workouts
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +26,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
@@ -43,6 +46,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.akreutz.fitness.ui.common.ShimmerPlaceholderList
+import com.akreutz.fitness.ui.common.pressScale
+import com.akreutz.fitness.ui.common.rememberCountUp
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
@@ -58,6 +64,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * A getter rather than a cached value, so it picks up the default locale fresh each time it's
@@ -83,9 +90,7 @@ fun WorkoutsScreen(
 ) {
     when (uiState) {
         is WorkoutHistoryUiState.Loading -> {
-            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            ShimmerPlaceholderList(heights = listOf(72.dp, 330.dp, 84.dp, 84.dp), modifier = modifier)
         }
         is WorkoutHistoryUiState.Empty -> {
             Column(
@@ -145,17 +150,25 @@ private fun WorkoutHistory(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item(key = "stats") { WorkoutStatsRow(workoutDays = workoutDays, total = sessions.size) }
+        item(key = "stats") {
+            WorkoutStatsRow(
+                workoutDays = workoutDays,
+                total = sessions.size,
+                modifier = Modifier.animateItem(),
+            )
+        }
         item(key = "calendar") {
             WorkoutCalendar(
                 workoutDays = workoutDays,
                 selectedDay = selectedDay,
                 onDaySelected = { selectedEpochDay = it?.toEpochDay() },
+                modifier = Modifier.animateItem(),
             )
         }
         if (selectedDay != null) {
             item(key = "filter") {
                 InputChip(
+                    modifier = Modifier.animateItem(),
                     selected = true,
                     onClick = { selectedEpochDay = null },
                     label = { Text(selectedDay.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.ENGLISH))) },
@@ -175,11 +188,11 @@ private fun WorkoutHistory(
                     text = month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.ENGLISH)),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                    modifier = Modifier.animateItem().padding(top = 8.dp, start = 4.dp),
                 )
             }
             items(entries, key = { it.first.session.id }) { (session, _) ->
-                WorkoutSessionCard(session = session)
+                WorkoutSessionCard(session = session, modifier = Modifier.animateItem())
             }
         }
     }
@@ -200,14 +213,15 @@ private fun WorkoutStatsRow(
     }
     val thisMonth = workoutDays.count { YearMonth.from(it) == YearMonth.from(today) }
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        StatTile("This week", thisWeek.toString(), Modifier.weight(1f))
-        StatTile("This month", thisMonth.toString(), Modifier.weight(1f))
-        StatTile("All time", total.toString(), Modifier.weight(1f))
+        StatTile("This week", thisWeek, Modifier.weight(1f))
+        StatTile("This month", thisMonth, Modifier.weight(1f))
+        StatTile("All time", total, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun StatTile(label: String, value: String, modifier: Modifier = Modifier) {
+private fun StatTile(label: String, value: Int, modifier: Modifier = Modifier) {
+    val shown by rememberCountUp(value.toFloat())
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
@@ -218,7 +232,7 @@ private fun StatTile(label: String, value: String, modifier: Modifier = Modifier
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = value,
+                text = shown.roundToInt().toString(),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -282,7 +296,7 @@ private fun WorkoutSessionCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .animateContentSize(),
+            .pressScale(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ),
@@ -336,14 +350,20 @@ private fun WorkoutSessionCard(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (expanded) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    session.exercises.forEach { exercise ->
-                        ExerciseStatsRow(exercise = exercise, sessionCompletedAt = session.session.completedAt)
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                Column {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        session.exercises.forEach { exercise ->
+                            ExerciseStatsRow(exercise = exercise, sessionCompletedAt = session.session.completedAt)
+                        }
                     }
                 }
             }

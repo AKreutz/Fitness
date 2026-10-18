@@ -67,8 +67,11 @@ sealed interface WorkoutSessionUiState {
     /** The workout had no exercises to guide through, or was deleted mid-session. */
     data object Unavailable : WorkoutSessionUiState
 
-    /** The user has gone through every exercise and the session is done. */
-    data object Finished : WorkoutSessionUiState
+    /**
+     * The user has gone through every exercise and the session is done. [personalRecords] is how
+     * many of its exercises were done at a heavier weight than ever before.
+     */
+    data class Finished(val personalRecords: Int) : WorkoutSessionUiState
 }
 
 /** Describes the set currently shown on an [WorkoutSessionUiState.InProgress] card. */
@@ -152,6 +155,9 @@ class WorkoutSessionViewModel(
      */
     private val collectedRatings = mutableMapOf<String, ExercisePerformanceEntry>()
 
+    /** How many exercises were done at a new heaviest weight; set just before [readyToFinish]. */
+    private var personalRecords = 0
+
     /** Whether every exercise has been rated and the session is ready to finish. */
     private val readyToFinish = MutableStateFlow(false)
 
@@ -210,7 +216,7 @@ class WorkoutSessionViewModel(
             val exercises = workout?.exercises
             when {
                 exercises.isNullOrEmpty() -> WorkoutSessionUiState.Unavailable
-                progress.readyToFinish -> WorkoutSessionUiState.Finished
+                progress.readyToFinish -> WorkoutSessionUiState.Finished(personalRecords)
                 progress.exerciseIndex >= exercises.size -> WorkoutSessionUiState.Unavailable
                 else -> {
                     val exercise = exercises[progress.exerciseIndex]
@@ -354,6 +360,12 @@ class WorkoutSessionViewModel(
         val isLastExercise = exerciseIndex.value >= (latestExercises?.lastIndex ?: -1)
         if (isLastExercise) {
             viewModelScope.launch {
+                // Counted before recording, while the history still only holds earlier sessions. A
+                // first-ever performance has nothing to beat, so it does not count.
+                personalRecords = collectedRatings.count { (exerciseId, entry) ->
+                    val previous = latestExercises?.firstOrNull { it.exercise.id == exerciseId }?.records
+                    !previous.isNullOrEmpty() && entry.weightKg > previous.maxOf { it.weightKg }
+                }
                 repository.recordPerceivedEfforts(workoutId, collectedRatings, startedAt)
                 readyToFinish.value = true
             }

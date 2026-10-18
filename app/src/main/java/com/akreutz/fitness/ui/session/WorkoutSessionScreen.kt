@@ -117,6 +117,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.FitnessApplication
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.common.pressScale
 import com.akreutz.fitness.ui.common.dialogEnter
 import com.akreutz.fitness.ui.common.label
 import com.akreutz.fitness.data.model.ExerciseType
@@ -189,10 +190,11 @@ fun WorkoutSessionScreen(
             is WorkoutSessionUiState.Loading -> LoadingContent(Modifier.padding(innerPadding))
             is WorkoutSessionUiState.Unavailable ->
                 UnavailableContent(onCancel, Modifier.padding(innerPadding))
-            is WorkoutSessionUiState.Finished -> {
-                LoadingContent(Modifier.padding(innerPadding))
-                LaunchedEffect(Unit) { onFinish() }
-            }
+            is WorkoutSessionUiState.Finished -> WorkoutCompleteContent(
+                personalRecords = state.personalRecords,
+                onDone = onFinish,
+                modifier = Modifier.padding(innerPadding),
+            )
             is WorkoutSessionUiState.InProgress -> InProgressContent(
                 state = state,
                 weightStacks = weightStacks,
@@ -227,7 +229,7 @@ private fun UnavailableContent(onCancel: () -> Unit, modifier: Modifier = Modifi
             text = "This workout has no exercises to guide you through.",
             style = MaterialTheme.typography.bodyLarge,
         )
-        Button(onClick = onCancel, modifier = Modifier.padding(top = 16.dp)) {
+        Button(onClick = onCancel, modifier = Modifier.padding(top = 16.dp).pressScale()) {
             Text("Back")
         }
     }
@@ -333,14 +335,14 @@ private fun InProgressContent(
             if (state.currentSet.isWarmUp && state.remainingExercises.isNotEmpty()) {
                 OutlinedButton(
                     onClick = { switchPickerShown = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().pressScale(),
                 ) {
                     Text("Switch exercise")
                 }
             }
             OutlinedButton(
                 onClick = { cancelConfirmationShown = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().pressScale(),
             ) {
                 Text("Cancel")
             }
@@ -460,10 +462,17 @@ private fun ExerciseContent(
     }
 }
 
+private const val CHECKMARK_STROKE_FRACTION = 0.125f
+
 /** A checkmark that draws itself in as [progress] goes from 0f to 1f. */
 @Composable
-private fun AnimatedCheckmark(progress: Float, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(20.dp)) {
+internal fun AnimatedCheckmark(
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+    checkSize: Dp = 20.dp,
+) {
+    Canvas(modifier = modifier.size(checkSize)) {
         val start = Offset(size.width * 0.15f, size.height * 0.55f)
         val corner = Offset(size.width * 0.4f, size.height * 0.8f)
         val end = Offset(size.width * 0.85f, size.height * 0.25f)
@@ -484,7 +493,7 @@ private fun AnimatedCheckmark(progress: Float, color: Color, modifier: Modifier 
         drawPath(
             path = path,
             color = color,
-            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = this.size.width * CHECKMARK_STROKE_FRACTION, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
     }
 }

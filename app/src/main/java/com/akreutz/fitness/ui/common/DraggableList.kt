@@ -1,5 +1,9 @@
 package com.akreutz.fitness.ui.common
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +16,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,7 +61,8 @@ fun <T> DraggableList(
 /**
  * Like [DraggableList], but [itemContent] places the drag handle itself: it receives a `handle`
  * composable (taking the modifier to apply to the handle icon) to put wherever suits the row,
- * e.g. inside a card. Rows are separated by [rowSpacing].
+ * e.g. inside a card. Rows are separated by [rowSpacing]. Passing [itemKey] identifies rows across
+ * list changes, so added rows animate in and the others slide into place.
  */
 @Composable
 fun <T> DraggableListWithHandle(
@@ -64,6 +70,7 @@ fun <T> DraggableListWithHandle(
     onMove: (fromIndex: Int, toIndex: Int) -> Unit,
     modifier: Modifier = Modifier,
     rowSpacing: androidx.compose.ui.unit.Dp = 0.dp,
+    itemKey: ((T) -> Any)? = null,
     itemContent: @Composable (
         index: Int,
         item: T,
@@ -80,71 +87,89 @@ fun <T> DraggableListWithHandle(
     val rowHeightPx = remember { mutableStateMapOf<Int, Int>() }
 
     val spacingPx = with(LocalDensity.current) { rowSpacing.toPx() }
+    val keyOf: (Int) -> Any = { index -> itemKey?.invoke(items[index]) ?: index }
+    val initialKeys = remember { items.indices.map(keyOf).toSet() }
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(rowSpacing),
     ) {
         displayOrder.forEach { itemIndex ->
-            val isDragged = itemIndex == draggedIndex
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged { rowHeightPx[itemIndex] = it.height }
-                    .zIndex(if (isDragged) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = if (isDragged) dragOffsetY else 0f
-                    },
-            ) {
-                val handle: @Composable (Modifier) -> Unit = { handleModifier ->
-                    Icon(
-                    imageVector = Icons.Filled.DragHandle,
-                    contentDescription = "Drag to reorder",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = handleModifier
-                        .pointerInput(items) {
-                            detectDragGestures(
-                                onDragStart = {
-                                    draggedIndex = itemIndex
-                                    dragOffsetY = 0f
-                                },
-                                onDragEnd = {
-                                    val dragged = draggedIndex
-                                    draggedIndex = null
-                                    dragOffsetY = 0f
-                                    if (dragged != null) {
-                                        val finalPosition = displayOrder.indexOf(dragged)
-                                        onMove(dragged, finalPosition)
-                                    }
-                                },
-                                onDragCancel = {
-                                    draggedIndex = null
-                                    dragOffsetY = 0f
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    val dragged = draggedIndex ?: return@detectDragGestures
-                                    dragOffsetY += dragAmount.y
-                                    val rowHeight = rowHeightPx[dragged] ?: return@detectDragGestures
-                                    val threshold = rowHeight / 2
-                                    val position = displayOrder.indexOf(dragged)
-                                    if (dragOffsetY > threshold && position < displayOrder.lastIndex) {
-                                        displayOrder = displayOrder.toMutableList().apply {
-                                            add(position + 1, removeAt(position))
-                                        }
-                                        dragOffsetY -= rowHeight + spacingPx
-                                    } else if (dragOffsetY < -threshold && position > 0) {
-                                        displayOrder = displayOrder.toMutableList().apply {
-                                            add(position - 1, removeAt(position))
-                                        }
-                                        dragOffsetY += rowHeight + spacingPx
-                                    }
-                                },
-                            )
-                        },
-                    )
+            val rowKey = keyOf(itemIndex)
+            key(rowKey) {
+                // Rows already present when the list first appeared are shown as-is; rows added later
+                // expand and fade in.
+                val visibleState = remember {
+                    MutableTransitionState(rowKey in initialKeys).apply { targetState = true }
                 }
-                itemContent(itemIndex, items[itemIndex], handle)
+                val isDragged = itemIndex == draggedIndex
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animatePlacement(enabled = !isDragged)
+                        .onSizeChanged { rowHeightPx[itemIndex] = it.height }
+                        .zIndex(if (isDragged) 1f else 0f)
+                        .graphicsLayer {
+                            translationY = if (isDragged) dragOffsetY else 0f
+                        },
+                ) {
+                    val handle: @Composable (Modifier) -> Unit = { handleModifier ->
+                        Icon(
+                        imageVector = Icons.Filled.DragHandle,
+                        contentDescription = "Drag to reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = handleModifier
+                            .pointerInput(items) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        draggedIndex = itemIndex
+                                        dragOffsetY = 0f
+                                    },
+                                    onDragEnd = {
+                                        val dragged = draggedIndex
+                                        draggedIndex = null
+                                        dragOffsetY = 0f
+                                        if (dragged != null) {
+                                            val finalPosition = displayOrder.indexOf(dragged)
+                                            onMove(dragged, finalPosition)
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        draggedIndex = null
+                                        dragOffsetY = 0f
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        val dragged = draggedIndex ?: return@detectDragGestures
+                                        dragOffsetY += dragAmount.y
+                                        val rowHeight = rowHeightPx[dragged] ?: return@detectDragGestures
+                                        val threshold = rowHeight / 2
+                                        val position = displayOrder.indexOf(dragged)
+                                        if (dragOffsetY > threshold && position < displayOrder.lastIndex) {
+                                            displayOrder = displayOrder.toMutableList().apply {
+                                                add(position + 1, removeAt(position))
+                                            }
+                                            dragOffsetY -= rowHeight + spacingPx
+                                        } else if (dragOffsetY < -threshold && position > 0) {
+                                            displayOrder = displayOrder.toMutableList().apply {
+                                                add(position - 1, removeAt(position))
+                                            }
+                                            dragOffsetY += rowHeight + spacingPx
+                                        }
+                                    },
+                                )
+                            },
+                        )
+                    }
+                    Column {
+                        AnimatedVisibility(
+                            visibleState = visibleState,
+                            enter = fadeIn() + expandVertically(),
+                        ) {
+                            itemContent(itemIndex, items[itemIndex], handle)
+                        }
+                    }
+                }
             }
         }
     }

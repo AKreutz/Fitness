@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -45,8 +44,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.akreutz.fitness.ui.common.ShimmerPlaceholderList
 import androidx.compose.ui.unit.sp
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.common.staggeredEntrance
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import java.time.Instant
@@ -75,9 +76,7 @@ fun ProfileScreen(
 ) {
     when (uiState) {
         is ProfileUiState.Loading -> {
-            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            ShimmerPlaceholderList(heights = listOf(190.dp, 230.dp, 80.dp), modifier = modifier)
         }
         is ProfileUiState.Loaded -> {
             var planPendingDelete by remember { mutableStateOf<TrainingPlanWithWorkouts?>(null) }
@@ -93,6 +92,7 @@ fun ProfileScreen(
                 if (activePlan != null) {
                     item(key = "active-${activePlan.trainingPlan.id}") {
                         ActivePlanCard(
+                            modifier = Modifier.animateItem().staggeredEntrance("profile", 0),
                             plan = activePlan,
                             completedSessionCount =
                                 uiState.completedSessionCounts[activePlan.trainingPlan.id] ?: 0,
@@ -104,7 +104,10 @@ fun ProfileScreen(
                     }
                 }
                 item(key = "plans") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier.animateItem().staggeredEntrance("profile", 1),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         SectionLabel(
                             when {
                                 otherPlans.isNotEmpty() && activePlan != null -> "Other plans"
@@ -140,7 +143,10 @@ fun ProfileScreen(
                     }
                 }
                 item(key = "equipment") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier.animateItem().staggeredEntrance("profile", 2),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         SectionLabel("Equipment")
                         SectionCard {
                             ActionRow(

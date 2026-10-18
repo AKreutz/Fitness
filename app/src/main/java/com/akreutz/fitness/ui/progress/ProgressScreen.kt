@@ -19,13 +19,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,11 +40,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import com.akreutz.fitness.ui.common.ShimmerPlaceholderList
+import com.akreutz.fitness.ui.common.rememberCountUp
 import androidx.compose.ui.unit.sp
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.ui.theme.effortColors
@@ -54,6 +61,8 @@ import java.util.Locale
  * A getter rather than a cached value, so it picks up the default locale fresh each time it's
  * used instead of freezing it at class-init time.
  */
+private const val REVEAL_MILLIS = 900
+
 private val axisDateFormatter: DateTimeFormatter
     get() = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)
 
@@ -66,9 +75,7 @@ private val axisDateFormatter: DateTimeFormatter
 fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
     when (uiState) {
         is ProgressUiState.Loading -> {
-            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            ShimmerPlaceholderList(heights = listOf(40.dp, 220.dp, 240.dp, 240.dp), modifier = modifier)
         }
         is ProgressUiState.NoPlan -> {
             Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -103,7 +110,10 @@ fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 item(key = "filters") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyRow(
+                        modifier = Modifier.animateItem(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         item {
                             FilterChip(
                                 selected = selected == null,
@@ -123,13 +133,15 @@ fun ProgressScreen(uiState: ProgressUiState, modifier: Modifier = Modifier) {
                     }
                 }
                 if (selected == null) {
-                    item(key = "summary") { SummaryProgressCard(summary = uiState.summary) }
+                    item(key = "summary") {
+                        SummaryProgressCard(summary = uiState.summary, modifier = Modifier.animateItem())
+                    }
                 }
                 items(
                     if (selected == null) workouts else listOf(selected),
                     key = { it.workoutId },
                 ) { workout ->
-                    WorkoutProgressSection(workout = workout)
+                    WorkoutProgressSection(workout = workout, modifier = Modifier.animateItem())
                 }
             }
         }
@@ -261,6 +273,7 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
 @Composable
 private fun SummaryProgressCard(summary: List<SummaryDataPoint>, modifier: Modifier = Modifier) {
     val latest = summary.lastOrNull()
+    val shownPercent by rememberCountUp((latest?.summedPercentIncrease ?: 0.0).toFloat())
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -283,7 +296,7 @@ private fun SummaryProgressCard(summary: List<SummaryDataPoint>, modifier: Modif
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "${latest.summedPercentIncrease.formatSigned()}%",
+                        text = "${shownPercent.toDouble().formatSigned()}%",
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -448,6 +461,16 @@ private fun LineChart(
     val minValueLabel = formatValueLabel(minValue)
     val maxValueLabel = formatValueLabel(maxValue)
 
+    // Draws the data in from left to right the first time the chart is shown.
+    var revealed by rememberSaveable { mutableStateOf(false) }
+    val reveal = remember { Animatable(if (revealed) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!revealed) {
+            revealed = true
+            reveal.animateTo(1f, tween(REVEAL_MILLIS, easing = FastOutSlowInEasing))
+        }
+    }
+
     Canvas(modifier = modifier) {
         val leftInset = 36.dp.toPx()
         val bottomInset = 18.dp.toPx()
@@ -482,38 +505,42 @@ private fun LineChart(
         }
         val baselineY = topInset + chartHeight
 
-        // The area under each segment, filled in the color of the later (right-hand) point,
-        // drawn before the line/dots so they sit on top.
-        for (i in 0 until offsets.size - 1) {
-            val segmentPath = Path().apply {
-                moveTo(offsets[i].x, baselineY)
-                lineTo(offsets[i].x, offsets[i].y)
-                lineTo(offsets[i + 1].x, offsets[i + 1].y)
-                lineTo(offsets[i + 1].x, baselineY)
-                close()
+        // Everything that makes up the data (fill, line, dots) is revealed left to right on first show;
+        // the gridlines and axis labels stay put.
+        clipRect(right = leftInset + chartWidth * reveal.value + 8.dp.toPx()) {
+            // The area under each segment, filled in the color of the later (right-hand) point,
+            // drawn before the line/dots so they sit on top.
+            for (i in 0 until offsets.size - 1) {
+                val segmentPath = Path().apply {
+                    moveTo(offsets[i].x, baselineY)
+                    lineTo(offsets[i].x, offsets[i].y)
+                    lineTo(offsets[i + 1].x, offsets[i + 1].y)
+                    lineTo(offsets[i + 1].x, baselineY)
+                    close()
+                }
+                drawPath(path = segmentPath, color = points[i + 1].fillColor.copy(alpha = 0.5f))
             }
-            drawPath(path = segmentPath, color = points[i + 1].fillColor.copy(alpha = 0.5f))
-        }
 
-        // The line itself: thin, rounded ends, with a marker dot per point.
-        for (i in 0 until offsets.size - 1) {
-            drawLine(
-                color = lineColor,
-                start = offsets[i],
-                end = offsets[i + 1],
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
-        }
-        // Marker dots, colored by their own point rather than the line's accent color, so a
-        // point's status is visible even where the preceding segment's fill doesn't reach.
-        offsets.forEachIndexed { index, offset ->
-            drawCircle(color = points[index].pointColor, radius = 3.5.dp.toPx(), center = offset)
-        }
-        // The latest point gets a larger dot with a white ring, so the current value stands out.
-        points.lastOrNull()?.let { last ->
-            drawCircle(color = ringColor, radius = 6.dp.toPx(), center = offsets.last())
-            drawCircle(color = last.pointColor, radius = 4.dp.toPx(), center = offsets.last())
+            // The line itself: thin, rounded ends, with a marker dot per point.
+            for (i in 0 until offsets.size - 1) {
+                drawLine(
+                    color = lineColor,
+                    start = offsets[i],
+                    end = offsets[i + 1],
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+            // Marker dots, colored by their own point rather than the line's accent color, so a
+            // point's status is visible even where the preceding segment's fill doesn't reach.
+            offsets.forEachIndexed { index, offset ->
+                drawCircle(color = points[index].pointColor, radius = 3.5.dp.toPx(), center = offset)
+            }
+            // The latest point gets a larger dot with a white ring, so the current value stands out.
+            points.lastOrNull()?.let { last ->
+                drawCircle(color = ringColor, radius = 6.dp.toPx(), center = offsets.last())
+                drawCircle(color = last.pointColor, radius = 4.dp.toPx(), center = offsets.last())
+            }
         }
 
         // First/last dates on the x-axis.

@@ -40,6 +40,7 @@ import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.common.pressScale
 import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.DraggableList
 
@@ -191,11 +192,11 @@ private fun NamePlanStep(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (onCancel != null) {
-                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).pressScale()) {
                     Text("Cancel")
                 }
             }
-            Button(onClick = onNext, enabled = canProceed, modifier = Modifier.weight(1f)) {
+            Button(onClick = onNext, enabled = canProceed, modifier = Modifier.weight(1f).pressScale()) {
                 Text("Next")
             }
         }
@@ -328,7 +329,8 @@ private fun AddExercisesStep(
             onClick = onFinish,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(16.dp)
+                .pressScale(),
         ) {
             Text("Finish setup")
         }

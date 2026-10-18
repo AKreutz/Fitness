@@ -22,10 +22,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
@@ -70,6 +70,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.ui.common.ShimmerPlaceholderList
+import com.akreutz.fitness.ui.common.pressScale
 import com.akreutz.fitness.ui.home.ActiveTrainingPlanUiState
 import com.akreutz.fitness.ui.home.ActiveTrainingPlanView
 import com.akreutz.fitness.ui.home.HomeViewModel
@@ -153,9 +155,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun LoadingScreen(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
-    }
+    ShimmerPlaceholderList(
+        heights = listOf(28.dp, 190.dp, 190.dp, 190.dp),
+        modifier = modifier.systemBarsPadding(),
+    )
 }
 
 /** A bottom-navigation destination, per Material Design guidance (3-5 top-level destinations). */
@@ -368,6 +371,7 @@ private fun HomeScreen(
                     text = { Text("Start workout") },
                     icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                     onClick = { homeViewModel.startNextWorkout() },
+                    modifier = Modifier.pressScale(),
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                 )

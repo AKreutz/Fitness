@@ -36,12 +36,12 @@ Workout session screen: rest ring, set transitions, set-complete feedback, rolli
 - [x] Screen transitions: shared-axis `NavHost` transitions, with the session screen sliding up from the bottom
 - [x] Tab switching: crossfade or slide between the bottom-bar tabs and animate the nav indicator
 - [x] Dialogs: scale and fade in
-- [ ] List item animations: `Modifier.animateItem()` in the plan editor and history lists (add, remove, reorder)
-- [ ] Staggered entrance for the cards on Home and Profile on first load
-- [ ] Expand/collapse with `AnimatedVisibility` for the exercise chips and overflow menus
-- [ ] Progress chart: draw the line in left to right the first time
-- [ ] Calendar: slide the month grid on month change and pop in the workout-day markers
-- [ ] Count-up animation for summary stats
-- [ ] Press feedback: slight scale-down on buttons and cards
-- [ ] Workout completion celebration (confetti or checkmark burst), stronger for a personal record
-- [ ] Shimmer placeholders while data loads
+- [x] List item animations: `Modifier.animateItem()` in the plan editor and history lists (add, remove, reorder)
+- [x] Staggered entrance for the cards on Home and Profile on first load
+- [x] Expand/collapse with `AnimatedVisibility` for the exercise chips and overflow menus
+- [x] Progress chart: draw the line in left to right the first time
+- [x] Calendar: slide the month grid on month change and pop in the workout-day markers
+- [x] Count-up animation for summary stats
+- [x] Press feedback: slight scale-down on buttons and cards
+- [x] Workout completion celebration (confetti or checkmark burst), stronger for a personal record
+- [x] Shimmer placeholders while data loads
