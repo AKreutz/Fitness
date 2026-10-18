@@ -202,6 +202,7 @@ fun WorkoutSessionScreen(
                 weightStacks = weightStacks,
                 onNext = viewModel::advance,
                 onSwitchTo = viewModel::switchTo,
+                onSkip = viewModel::skipExercise,
                 onRate = viewModel::rateExercise,
                 onRespondToWeightIncreaseOffer = viewModel::respondToWeightIncreaseOffer,
                 onCancel = onCancel,
@@ -243,6 +244,7 @@ private fun InProgressContent(
     weightStacks: List<WeightStack>,
     onNext: () -> Unit,
     onSwitchTo: (String) -> Unit,
+    onSkip: () -> Unit,
     onRate: (PerceivedEffort) -> Unit,
     onRespondToWeightIncreaseOffer: (Double?) -> Unit,
     onCancel: () -> Unit,
@@ -250,6 +252,7 @@ private fun InProgressContent(
 ) {
     var cancelConfirmationShown by remember { mutableStateOf(false) }
     var switchPickerShown by remember { mutableStateOf(false) }
+    var skipConfirmationShown by remember { mutableStateOf(false) }
 
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -338,12 +341,22 @@ private fun InProgressContent(
             // Secondary actions share one row of low-emphasis buttons so "Next" is the only
             // prominent control; Cancel is tinted since it discards the workout.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                if (state.currentSet.isWarmUp && state.remainingExercises.isNotEmpty()) {
+                if (state.currentSet.isWarmUp &&
+                    (state.remainingExercises.isNotEmpty() || state.skippedExercises.isNotEmpty())
+                ) {
                     TextButton(
                         onClick = { switchPickerShown = true },
                         modifier = Modifier.weight(1f).pressScale(),
                     ) {
                         Text("Switch exercise")
+                    }
+                }
+                if (state.canSkip) {
+                    TextButton(
+                        onClick = { skipConfirmationShown = true },
+                        modifier = Modifier.weight(1f).pressScale(),
+                    ) {
+                        Text("Skip")
                     }
                 }
                 TextButton(
@@ -374,11 +387,28 @@ private fun InProgressContent(
     if (switchPickerShown) {
         SwitchExerciseDialog(
             exercises = state.remainingExercises,
+            skipped = state.skippedExercises,
             onPick = { exerciseId ->
                 switchPickerShown = false
                 onSwitchTo(exerciseId)
             },
             onDismiss = { switchPickerShown = false },
+        )
+    }
+
+    if (skipConfirmationShown) {
+        ConfirmDestructiveDialog(
+            title = "Skip ${state.exercise.exercise.name}?",
+            message = "It won't be rated or recorded for this session.",
+            confirmLabel = "Skip",
+            dismissLabel = "Keep going",
+            icon = null,
+            keepIsPrimary = true,
+            onConfirm = {
+                skipConfirmationShown = false
+                onSkip()
+            },
+            onDismiss = { skipConfirmationShown = false },
         )
     }
 
@@ -533,13 +563,14 @@ private fun RollingNumberText(
 }
 
 /**
- * Lets the user pick which of the [exercises] still to come to do now, e.g. because the equipment
+ * Lets the user pick which of the [exercises] still to come, or the [skipped] ones, to do now, e.g. because the equipment
  * for the current one is taken. The current exercise moves back to just after the picked one.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwitchExerciseDialog(
     exercises: List<ExerciseWithPerformanceHistory>,
+    skipped: List<ExerciseWithPerformanceHistory>,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -556,7 +587,9 @@ private fun SwitchExerciseDialog(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
             )
-            exercises.forEachIndexed { index, item ->
+            val entries = skipped.map { it to "Skipped" } +
+                exercises.mapIndexed { index, item -> item to "Next".takeIf { index == 0 } }
+            entries.forEach { (item, badge) ->
                 val exercise = item.exercise
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(
@@ -593,14 +626,25 @@ private fun SwitchExerciseDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (index == 0) {
+                    if (badge != null) {
+                        val isSkippedBadge = badge == "Skipped"
                         Text(
-                            text = "Next",
+                            text = badge,
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            color = if (isSkippedBadge) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                            },
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(MaterialTheme.colorScheme.tertiaryContainer)
+                                .background(
+                                    if (isSkippedBadge) {
+                                        MaterialTheme.colorScheme.errorContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    },
+                                )
                                 .padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }

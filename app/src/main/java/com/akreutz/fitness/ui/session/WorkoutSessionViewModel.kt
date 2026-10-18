@@ -41,7 +41,9 @@ sealed interface WorkoutSessionUiState {
      * [nextExercise] is whichever exercise follows [exercise], or `null` if it's the workout's
      * last. [remainingExercises] are all the ones still to come after [exercise], any of which
      * can be done next instead via [WorkoutSessionViewModel.switchTo] while [currentSet] is
-     * still the warm-up. [recoveryGoalSeconds] is [exercise]'s prescribed rest duration, for showing recovery
+     * still the warm-up, as can any of the [skippedExercises] from earlier in the session.
+     * [canSkip] is whether [WorkoutSessionViewModel.skipExercise] currently
+     * does anything. [recoveryGoalSeconds] is [exercise]'s prescribed rest duration, for showing recovery
      * progress towards it; it's unrelated to whether the user is currently resting (see
      * [recoverySeconds]). When [exerciseToRate] is non-null, the just-finished exercise is
      * awaiting a perceived-effort rating (via [WorkoutSessionViewModel.rateExercise]) before the
@@ -57,7 +59,9 @@ sealed interface WorkoutSessionUiState {
         val totalExercises: Int,
         val nextExercise: ExerciseWithPerformanceHistory?,
         val remainingExercises: List<ExerciseWithPerformanceHistory>,
+        val skippedExercises: List<ExerciseWithPerformanceHistory>,
         val currentSet: SetProgress,
+        val canSkip: Boolean,
         val recoverySeconds: Int?,
         val recoveryGoalSeconds: Int,
         val exerciseToRate: ExerciseWithPerformanceHistory? = null,
@@ -136,6 +140,9 @@ class WorkoutSessionViewModel(
     private val exerciseIndex = MutableStateFlow(0)
     private val step = MutableStateFlow<ExerciseStep>(ExerciseStep.WarmUp)
     private val resting = MutableStateFlow(false)
+
+    /** Ids of exercises skipped via [skipExercise] and not yet gone back to. */
+    private val skippedIds = MutableStateFlow<Set<String>>(emptySet())
     private val recoverySeconds = MutableStateFlow<Int?>(null)
     private var recoveryJob: Job? = null
 
@@ -195,20 +202,23 @@ class WorkoutSessionViewModel(
         val exerciseToRate: ExerciseWithPerformanceHistory?,
         val exerciseToOfferWeightIncrease: ExerciseWithPerformanceHistory?,
         val readyToFinish: Boolean,
+        val skippedIds: Set<String>,
     )
 
     private val setState: Flow<Pair<ExerciseStep, Boolean>> = combine(step, resting, ::Pair)
     private val prompts: Flow<Pair<ExerciseWithPerformanceHistory?, ExerciseWithPerformanceHistory?>> =
         combine(exerciseToRate, exerciseToOfferWeightIncrease, ::Pair)
 
+    private val finishAndSkipped: Flow<Pair<Boolean, Set<String>>> = combine(readyToFinish, skippedIds, ::Pair)
+
     private val progress: Flow<Progress> = combine(
         exerciseIndex,
         setState,
         recoverySeconds,
         prompts,
-        readyToFinish,
-    ) { index: Int, (currentStep, isResting), seconds: Int?, (toRate, toOfferIncrease), finished: Boolean ->
-        Progress(index, currentStep, isResting, seconds, toRate, toOfferIncrease, finished)
+        finishAndSkipped,
+    ) { index: Int, (currentStep, isResting), seconds: Int?, (toRate, toOfferIncrease), (finished, skipped) ->
+        Progress(index, currentStep, isResting, seconds, toRate, toOfferIncrease, finished, skipped)
     }
 
     val uiState: StateFlow<WorkoutSessionUiState> =
@@ -228,7 +238,10 @@ class WorkoutSessionViewModel(
                         totalExercises = exercises.size,
                         nextExercise = exercises.getOrNull(progress.exerciseIndex + 1),
                         remainingExercises = exercises.drop(progress.exerciseIndex + 1),
+                        skippedExercises = exercises.take(progress.exerciseIndex)
+                            .filter { it.exercise.id in progress.skippedIds },
                         currentSet = setProgress,
+                        canSkip = canSkipCurrentExercise(),
                         recoverySeconds = progress.recoverySeconds.takeIf { progress.resting },
                         recoveryGoalSeconds = exercise.exercise.restSeconds,
                         exerciseToRate = progress.exerciseToRate,
@@ -289,8 +302,8 @@ class WorkoutSessionViewModel(
     }
 
     /**
-     * Does the not-yet-done exercise [exerciseId] now instead of the current one, which moves
-     * back to just after it. Only possible at the current exercise's warm-up, before any of its
+     * Does the not-yet-done or skipped exercise [exerciseId] now instead of the current one,
+     * which moves back to just after it. Only possible at the current exercise's warm-up, before any of its
      * sets are done, so no partial progress is lost; otherwise ignored.
      */
     fun switchTo(exerciseId: String) {
@@ -298,12 +311,35 @@ class WorkoutSessionViewModel(
         if (exerciseToRate.value != null || exerciseToOfferWeightIncrease.value != null) return
         val ids = latestExercises?.map { it.exercise.id } ?: return
         val index = exerciseIndex.value
-        if (exerciseId !in ids.drop(index + 1)) return
-        sessionOrder.value = ids.toMutableList().apply {
+        val isRemaining = exerciseId in ids.drop(index + 1)
+        val isSkipped = exerciseId in skippedIds.value && exerciseId in ids.take(index)
+        if (!isRemaining && !isSkipped) return
+        val newOrder = ids.toMutableList().apply {
             remove(exerciseId)
-            add(index, exerciseId)
+            add(indexOf(ids[index]), exerciseId)
         }
+        // Order first, then index: in between, the current exercise is still the one shown.
+        sessionOrder.value = newOrder
+        exerciseIndex.value = newOrder.indexOf(exerciseId)
+        skippedIds.value -= exerciseId
     }
+
+    /**
+     * Skips the current exercise at any point in it: it gets no rating and isn't recorded, and
+     * the session moves on to the next exercise (or finishes, if this was the last). Ignored
+     * while a rating or weight-increase prompt is pending, and for the last exercise when nothing
+     * else has been done this session, since there'd be nothing to save.
+     */
+    fun skipExercise() {
+        if (exerciseToRate.value != null || exerciseToOfferWeightIncrease.value != null) return
+        if (!canSkipCurrentExercise()) return
+        stopRecoveryTimer()
+        latestExercises?.getOrNull(exerciseIndex.value)?.let { skippedIds.value += it.exercise.id }
+        proceedAfterRating()
+    }
+
+    private fun canSkipCurrentExercise(): Boolean =
+        exerciseIndex.value < (latestExercises?.lastIndex ?: -1) || collectedRatings.isNotEmpty()
 
     /**
      * Records [effort] as the just-finished exercise's rating. If [effort] is
