@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 /** Whether the user's training plans are still loading, or loaded (there's always at least one). */
 sealed interface ProfileUiState {
@@ -25,12 +26,14 @@ sealed interface ProfileUiState {
     /**
      * [activePlanId] is the plan the user is currently associated with, or `null` if none is
      * (e.g. right after deleting the active one). [completedSessionCounts] maps each plan's id to
-     * how many workout sessions have been completed under it.
+     * how many workout sessions have been completed under it. [lastTrainedAt] maps a plan's id to
+     * when its most recent session was completed; plans without sessions have no entry.
      */
     data class Loaded(
         val plans: List<TrainingPlanWithWorkouts>,
         val activePlanId: String?,
         val completedSessionCounts: Map<String, Int>,
+        val lastTrainedAt: Map<String, Instant>,
     ) : ProfileUiState
 }
 
@@ -44,10 +47,14 @@ class ProfileViewModel(private val repository: TrainingPlanRepository) : ViewMod
         val completedSessionCounts = sessions
             .groupingBy { it.workout.trainingPlanId }
             .eachCount()
+        val lastTrainedAt = sessions
+            .groupBy { it.workout.trainingPlanId }
+            .mapValues { (_, planSessions) -> planSessions.maxOf { it.session.completedAt } }
         ProfileUiState.Loaded(
             plans = plans,
             activePlanId = activePlanId,
             completedSessionCounts = completedSessionCounts,
+            lastTrainedAt = lastTrainedAt,
         )
     }
         .stateIn(
