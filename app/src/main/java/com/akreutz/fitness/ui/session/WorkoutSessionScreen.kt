@@ -4,6 +4,26 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,13 +80,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextStyle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -215,41 +246,88 @@ private fun InProgressContent(
     var cancelConfirmationShown by remember { mutableStateOf(false) }
     var switchPickerShown by remember { mutableStateOf(false) }
 
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val buttonScale = remember { Animatable(1f) }
+    val checkProgress = remember { Animatable(0f) }
+    val checkAlpha = remember { Animatable(0f) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column {
             ExerciseDotProgress(
                 exerciseNumber = state.exerciseNumber,
                 totalExercises = state.totalExercises,
             )
-            ExerciseHeaderRow(exercise = state.exercise)
-            if (state.currentSet.isWarmUp.not()) {
-                SetPillsRow(exercise = state.exercise, setProgress = state.currentSet)
-            }
-            CurrentExerciseCard(
-                exercise = state.exercise,
-                setProgress = state.currentSet,
-                weightStacks = weightStacks,
-            )
-            if (state.nextExercise != null) {
-                UpNextRow(exercise = state.nextExercise)
-            }
-            val resting = state.currentSet as? SetProgress.Resting
-            if (state.recoverySeconds != null && resting != null) {
-                RecoveryRow(
-                    seconds = state.recoverySeconds,
-                    goalSeconds = state.recoveryGoalSeconds,
-                    nextSetLabel = resting.nextSetLabel,
-                )
+            // Everything about the exercise slides out and the next one in when the exercise
+            // changes; set-to-set updates within one exercise (same key) just recompose in place.
+            AnimatedContent(
+                targetState = state,
+                contentKey = { it.exercise.exercise.id },
+                transitionSpec = {
+                    (slideInHorizontally(tween(320)) { it / 3 } + fadeIn(tween(320))) togetherWith
+                        (slideOutHorizontally(tween(320)) { -it / 3 } + fadeOut(tween(200))) using
+                        SizeTransform(clip = false)
+                },
+                label = "exercise",
+            ) { exerciseState ->
+                ExerciseContent(state = exerciseState, weightStacks = weightStacks)
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
-                Text(state.currentSet.nextLabel)
+            Box(contentAlignment = Alignment.CenterEnd, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        val finishingSet = state.currentSet is SetProgress.Working
+                        haptics.performHapticFeedback(
+                            if (finishingSet) HapticFeedbackType.Confirm else HapticFeedbackType.TextHandleMove,
+                        )
+                        scope.launch {
+                            buttonScale.snapTo(0.94f)
+                            buttonScale.animateTo(
+                                1f,
+                                spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            )
+                        }
+                        if (finishingSet) {
+                            scope.launch {
+                                checkProgress.snapTo(0f)
+                                checkAlpha.snapTo(1f)
+                                checkProgress.animateTo(1f, tween(350))
+                                delay(450)
+                                checkAlpha.animateTo(0f, tween(200))
+                            }
+                        }
+                        onNext()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            scaleX = buttonScale.value
+                            scaleY = buttonScale.value
+                        },
+                ) {
+                    AnimatedContent(
+                        targetState = state.currentSet.nextLabel,
+                        transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                        label = "nextLabel",
+                    ) { label ->
+                        Text(label)
+                    }
+                }
+                if (checkAlpha.value > 0f) {
+                    AnimatedCheckmark(
+                        progress = checkProgress.value,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .padding(end = 24.dp)
+                            .alpha(checkAlpha.value),
+                    )
+                }
             }
             if (state.currentSet.isWarmUp && state.remainingExercises.isNotEmpty()) {
                 OutlinedButton(
@@ -303,6 +381,136 @@ private fun InProgressContent(
             },
             onDismiss = { cancelConfirmationShown = false },
         )
+    }
+}
+
+/** What [RecoveryRow] shows, as one value so it can key an [AnimatedContent] (`null` = not resting). */
+private data class RecoveryInfo(val seconds: Int, val goalSeconds: Int, val nextSetLabel: String)
+
+/**
+ * Everything on the session screen that belongs to the current exercise: its header, set pills,
+ * card, up-next strip and rest timer. The set pills, the warm-up/working card and the rest timer
+ * each animate in and out as the user moves between warm-up, working sets and resting.
+ */
+@Composable
+private fun ExerciseContent(
+    state: WorkoutSessionUiState.InProgress,
+    weightStacks: List<WeightStack>,
+) {
+    val setProgress = state.currentSet
+    val resting = setProgress as? SetProgress.Resting
+    val recovery = if (state.recoverySeconds != null && resting != null) {
+        RecoveryInfo(state.recoverySeconds, state.recoveryGoalSeconds, resting.nextSetLabel)
+    } else {
+        null
+    }
+
+    Column {
+        ExerciseHeaderRow(exercise = state.exercise, modifier = Modifier.padding(top = 12.dp))
+        AnimatedVisibility(
+            visible = !setProgress.isWarmUp,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            SetPillsRow(
+                exercise = state.exercise,
+                setProgress = setProgress,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+        AnimatedContent(
+            targetState = setProgress.isWarmUp,
+            transitionSpec = {
+                (fadeIn(tween(250, delayMillis = 60)) + slideInVertically(tween(300)) { it / 6 }) togetherWith
+                    fadeOut(tween(150))
+            },
+            label = "exerciseCard",
+        ) { isWarmUp ->
+            CurrentExerciseCard(
+                exercise = state.exercise,
+                isWarmUp = isWarmUp,
+                weightStacks = weightStacks,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+        if (state.nextExercise != null) {
+            UpNextRow(exercise = state.nextExercise, modifier = Modifier.padding(top = 12.dp))
+        }
+        AnimatedContent(
+            targetState = recovery,
+            contentKey = { it != null },
+            transitionSpec = {
+                (fadeIn(tween(250)) + slideInVertically(tween(300)) { it / 4 }) togetherWith
+                    fadeOut(tween(150))
+            },
+            label = "recovery",
+        ) { info ->
+            if (info != null) {
+                RecoveryRow(
+                    seconds = info.seconds,
+                    goalSeconds = info.goalSeconds,
+                    nextSetLabel = info.nextSetLabel,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            } else {
+                Box(Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+/** A checkmark that draws itself in as [progress] goes from 0f to 1f. */
+@Composable
+private fun AnimatedCheckmark(progress: Float, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(20.dp)) {
+        val start = Offset(size.width * 0.15f, size.height * 0.55f)
+        val corner = Offset(size.width * 0.4f, size.height * 0.8f)
+        val end = Offset(size.width * 0.85f, size.height * 0.25f)
+        val firstLength = (corner - start).getDistance()
+        val secondLength = (end - corner).getDistance()
+        val drawn = (firstLength + secondLength) * progress
+        val path = Path().apply {
+            moveTo(start.x, start.y)
+            if (drawn <= firstLength) {
+                val t = drawn / firstLength
+                lineTo(start.x + (corner.x - start.x) * t, start.y + (corner.y - start.y) * t)
+            } else {
+                lineTo(corner.x, corner.y)
+                val t = (drawn - firstLength) / secondLength
+                lineTo(corner.x + (end.x - corner.x) * t, corner.y + (end.y - corner.y) * t)
+            }
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
+    }
+}
+
+/**
+ * Text for a number that rolls up when [value] increases and down when it decreases, instead of
+ * just swapping. [format] turns the value into the text shown.
+ */
+@Composable
+private fun RollingNumberText(
+    value: Double,
+    format: (Double) -> String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+) {
+    AnimatedContent(
+        targetState = value,
+        transitionSpec = {
+            val up = targetState > initialState
+            (slideInVertically(tween(250)) { if (up) it else -it } + fadeIn(tween(250))) togetherWith
+                (slideOutVertically(tween(250)) { if (up) -it else it } + fadeOut(tween(150)))
+        },
+        modifier = modifier,
+        label = "rollingNumber",
+    ) { shown ->
+        Text(text = format(shown), style = style, color = color)
     }
 }
 
@@ -437,18 +645,18 @@ private fun ExerciseDotProgress(
     ) {
         repeat(totalExercises) { index ->
             val isCurrent = index == exerciseNumber - 1
+            val dotWidth by animateDpAsState(if (isCurrent) 20.dp else 8.dp, tween(300), label = "dotWidth")
+            val dotColor by animateColorAsState(
+                if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                tween(300),
+                label = "dotColor",
+            )
             Box(
                 modifier = Modifier
                     .height(8.dp)
-                    .width(if (isCurrent) 20.dp else 8.dp)
+                    .width(dotWidth)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        if (isCurrent) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant
-                        },
-                    ),
+                    .background(dotColor),
             )
         }
         Text(
@@ -556,30 +764,34 @@ private fun SetPill(
     isCurrent: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = when {
-        isCurrent -> MaterialTheme.colorScheme.surfaceContainerHigh
-        isDone -> MaterialTheme.colorScheme.surfaceContainerHighest
-        else -> MaterialTheme.colorScheme.surface
-    }
-    val contentAlpha = if (isCurrent || isDone) 1f else 0.6f
+    val containerColor by animateColorAsState(
+        when {
+            isCurrent -> MaterialTheme.colorScheme.surfaceContainerHigh
+            isDone -> MaterialTheme.colorScheme.surfaceContainerHighest
+            else -> MaterialTheme.colorScheme.surface
+        },
+        tween(300),
+        label = "pillContainer",
+    )
+    val borderColor by animateColorAsState(
+        if (isCurrent) MaterialTheme.colorScheme.primary else Color.Transparent,
+        tween(300),
+        label = "pillBorder",
+    )
+    val contentAlpha by animateFloatAsState(
+        if (isCurrent || isDone) 1f else 0.6f,
+        tween(300),
+        label = "pillContentAlpha",
+    )
+    val pillAlpha by animateFloatAsState(if (isDone) 0.7f else 1f, tween(300), label = "pillAlpha")
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .then(
-                if (isCurrent) {
-                    Modifier.border(
-                        width = 1.5.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(10.dp),
-                    )
-                } else {
-                    Modifier
-                },
-            )
+            .border(width = 1.5.dp, color = borderColor, shape = RoundedCornerShape(10.dp))
             .background(containerColor)
             .padding(vertical = 8.dp)
-            .alpha(if (isDone) 0.7f else 1f),
+            .alpha(pillAlpha),
     ) {
         Text(
             text = "SET $setNumber",
@@ -875,7 +1087,7 @@ private fun formatKg(kg: Double): String =
 @Composable
 private fun CurrentExerciseCard(
     exercise: ExerciseWithPerformanceHistory,
-    setProgress: SetProgress,
+    isWarmUp: Boolean,
     weightStacks: List<WeightStack>,
     modifier: Modifier = Modifier,
 ) {
@@ -886,7 +1098,7 @@ private fun CurrentExerciseCard(
         ),
         elevation = CardDefaults.elevatedCardElevation(),
     ) {
-        if (setProgress.isWarmUp) {
+        if (isWarmUp) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -921,15 +1133,24 @@ private fun CurrentExerciseCard(
             val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
             val targetReps = RepScheme.targetReps(exercise.exercise.reps, lastPerceivedEffort)
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = String.format(Locale.US, "%.1f KG", exercise.exercise.weightKg),
+                RollingNumberText(
+                    value = exercise.exercise.weightKg,
+                    format = { String.format(Locale.US, "%.1f KG", it) },
                     style = MaterialTheme.typography.headlineSmall,
                 )
-                Text(
-                    text = "$targetReps target reps",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row {
+                    RollingNumberText(
+                        value = targetReps.toDouble(),
+                        format = { it.toInt().toString() },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = " target reps",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -1161,49 +1382,93 @@ private fun BarbellSideView(plates: List<Double>, modifier: Modifier = Modifier)
     val rodHeight = 8.dp // the bare bar is thinner than the sleeve it slides into, as on a real barbell
     val sleeveColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    // Every child (sleeve stub, plates) is drawn against the same tallPlateHeight, so all discs
-    // sit on a shared centerline regardless of their own height.
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.Top,
-        modifier = modifier.height(tallPlateHeight),
+    // The bar runs continuously behind the stub and plates, up to the collar, so there's no gap
+    // where a plate hasn't slid on yet (see SlidingPlate); the plates are layered on top of it.
+    Box(modifier = modifier.height(tallPlateHeight)) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            drawRect(
+                color = sleeveColor,
+                topLeft = Offset(0f, (size.height - rodHeight.toPx()) / 2f),
+                size = Size(size.width, rodHeight.toPx()),
+            )
+        }
+        // Every child (sleeve stub, plates) is drawn against the same tallPlateHeight, so all discs
+        // sit on a shared centerline regardless of their own height.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.height(tallPlateHeight),
+        ) {
+            // Short stub of exposed sleeve before the first plate, as on a real bar.
+            BarRodSegment(
+                width = 12.dp,
+                rodHeight = sleeveHeight,
+                color = sleeveColor,
+                tallPlateHeight = tallPlateHeight,
+            )
+            if (plates.isEmpty()) {
+                // No plates loaded (bar weight only): extend a bare length of rod past the sleeve
+                // stub instead of leaving the bar looking cut off.
+                BarRodSegment(
+                    width = 64.dp,
+                    rodHeight = rodHeight,
+                    color = sleeveColor,
+                    tallPlateHeight = tallPlateHeight,
+                )
+            }
+            // Plates slide onto the bar one after another; when the weight changes, only the plates
+            // that differ from before (by position and size) animate in.
+            plates.forEachIndexed { index, plateKg ->
+                key(index, plateKg) {
+                    SlidingPlate(index = index) {
+                        PlateDisc(
+                            plateKg = plateKg,
+                            tallPlateHeight = tallPlateHeight,
+                            basePlateWidth = basePlateWidth,
+                            color = plateColor(plateKg),
+                            labelColor = onPlateColor(plateKg),
+                        )
+                    }
+                }
+            }
+            if (plates.isNotEmpty()) {
+                // Short length of bare rod past the outermost plate, where the collar clamps it in
+                // place on a real bar.
+                BarRodSegment(
+                    width = 16.dp,
+                    rodHeight = rodHeight,
+                    color = sleeveColor,
+                    tallPlateHeight = tallPlateHeight,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Slides [content] (a plate) onto the bar from well off its outer end, with a bounce, once its turn
+ * comes ([index] staggers them, after the card has settled). The plate always takes up its final
+ * space and is only moved with a graphics-layer transform, so the bar itself never shifts as plates
+ * arrive. Drawn above the rod, since a real plate sits over the bar it's loaded on.
+ */
+@Composable
+private fun SlidingPlate(index: Int, content: @Composable () -> Unit) {
+    val slide = remember { Animatable(1f) } // 1 = off the end of the bar, 0 = seated
+    val fade = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(150L + index * 110L)
+        launch { fade.animateTo(1f, tween(150)) }
+        slide.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow))
+    }
+    Box(
+        modifier = Modifier
+            .zIndex(1f)
+            .graphicsLayer {
+                translationX = slide.value * size.width * 2
+                alpha = fade.value
+            },
     ) {
-        // Short stub of exposed sleeve before the first plate, as on a real bar.
-        BarRodSegment(
-            width = 12.dp,
-            rodHeight = sleeveHeight,
-            color = sleeveColor,
-            tallPlateHeight = tallPlateHeight,
-        )
-        if (plates.isEmpty()) {
-            // No plates loaded (bar weight only): extend a bare length of rod past the sleeve
-            // stub instead of leaving the bar looking cut off.
-            BarRodSegment(
-                width = 64.dp,
-                rodHeight = rodHeight,
-                color = sleeveColor,
-                tallPlateHeight = tallPlateHeight,
-            )
-        }
-        for (plateKg in plates) {
-            PlateDisc(
-                plateKg = plateKg,
-                tallPlateHeight = tallPlateHeight,
-                basePlateWidth = basePlateWidth,
-                color = plateColor(plateKg),
-                labelColor = onPlateColor(plateKg),
-            )
-        }
-        if (plates.isNotEmpty()) {
-            // Short length of bare rod past the outermost plate, where the collar clamps it in
-            // place on a real bar.
-            BarRodSegment(
-                width = 16.dp,
-                rodHeight = rodHeight,
-                color = sleeveColor,
-                tallPlateHeight = tallPlateHeight,
-            )
-        }
+        content()
     }
 }
 
@@ -1359,7 +1624,10 @@ private fun RecoveryRow(
 ) {
     val minutes = seconds / 60
     val remainingSeconds = seconds % 60
-    val progress = (seconds / goalSeconds.toFloat()).coerceIn(0f, 1f)
+    val target = (seconds / goalSeconds.toFloat()).coerceIn(0f, 1f)
+    // The timer ticks once a second; a linear tween of the same length makes the ring sweep
+    // continuously instead of stepping.
+    val progress by animateFloatAsState(target, tween(1000, easing = LinearEasing), label = "restProgress")
 
     Row(
         verticalAlignment = Alignment.CenterVertically,

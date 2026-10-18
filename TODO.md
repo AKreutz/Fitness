@@ -27,3 +27,21 @@
 - [ ] Wear OS: start and skip the rest timer, and give haptic feedback when it ends
 - [ ] Wear OS: log the Easy / Medium / Hard rating from the watch
 - [ ] Permissions flow and a settings toggle to enable or disable wearable features
+
+## Animations
+
+Workout session screen: rest ring, set transitions, set-complete feedback, rolling numbers, plate animation and exercise switching are done.
+
+- [ ] Rest finished: pulse the rest ring and tint it with `animateColorAsState` once the goal time is reached
+- [ ] Screen transitions: shared-axis `NavHost` transitions, with the session screen sliding up from the bottom
+- [ ] Tab switching: crossfade or slide between the bottom-bar tabs and animate the nav indicator
+- [ ] Dialogs: scale and fade in
+- [ ] List item animations: `Modifier.animateItem()` in the plan editor and history lists (add, remove, reorder)
+- [ ] Staggered entrance for the cards on Home and Profile on first load
+- [ ] Expand/collapse with `AnimatedVisibility` for the exercise chips and overflow menus
+- [ ] Progress chart: draw the line in left to right the first time
+- [ ] Calendar: slide the month grid on month change and pop in the workout-day markers
+- [ ] Count-up animation for summary stats
+- [ ] Press feedback: slight scale-down on buttons and cards
+- [ ] Workout completion celebration (confetti or checkmark burst), stronger for a personal record
+- [ ] Shimmer placeholders while data loads
