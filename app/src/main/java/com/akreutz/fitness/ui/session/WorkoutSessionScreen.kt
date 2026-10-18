@@ -83,7 +83,8 @@ import kotlin.math.pow
 
 /**
  * The screen shown while a workout is in progress: guides the user through [workoutId]'s
- * exercises one at a time, in their predefined order. The top bar matches Home's, titled with
+ * exercises one at a time, in their predefined order unless the user switches to a later one
+ * during an exercise's warm-up (see [SwitchExerciseDialog]). The top bar matches Home's, titled with
  * the workout's name. Each exercise starts with a warm-up set, then steps through its prescribed
  * working sets, resting (with a running timer) between all but the last. Finishing an exercise's
  * last set prompts the user to rate their perceived effort for it before moving on; once every
@@ -137,6 +138,7 @@ fun WorkoutSessionScreen(
                 state = state,
                 weightStacks = weightStacks,
                 onNext = viewModel::advance,
+                onSwitchTo = viewModel::switchTo,
                 onRate = viewModel::rateExercise,
                 onRespondToWeightIncreaseOffer = viewModel::respondToWeightIncreaseOffer,
                 onCancel = onCancel,
@@ -177,12 +179,14 @@ private fun InProgressContent(
     state: WorkoutSessionUiState.InProgress,
     weightStacks: List<WeightStack>,
     onNext: () -> Unit,
+    onSwitchTo: (String) -> Unit,
     onRate: (PerceivedEffort) -> Unit,
     onRespondToWeightIncreaseOffer: (Double?) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var cancelConfirmationShown by remember { mutableStateOf(false) }
+    var switchPickerShown by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -220,6 +224,14 @@ private fun InProgressContent(
             Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
                 Text(state.currentSet.nextLabel)
             }
+            if (state.currentSet.isWarmUp && state.remainingExercises.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = { switchPickerShown = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Switch exercise")
+                }
+            }
             OutlinedButton(
                 onClick = { cancelConfirmationShown = true },
                 modifier = Modifier.fillMaxWidth(),
@@ -243,6 +255,17 @@ private fun InProgressContent(
         )
     }
 
+    if (switchPickerShown) {
+        SwitchExerciseDialog(
+            exercises = state.remainingExercises,
+            onPick = { exerciseId ->
+                switchPickerShown = false
+                onSwitchTo(exerciseId)
+            },
+            onDismiss = { switchPickerShown = false },
+        )
+    }
+
     if (cancelConfirmationShown) {
         CancelWorkoutDialog(
             onConfirm = {
@@ -252,6 +275,40 @@ private fun InProgressContent(
             onDismiss = { cancelConfirmationShown = false },
         )
     }
+}
+
+/**
+ * Lets the user pick which of the [exercises] still to come to do now, e.g. because the equipment
+ * for the current one is taken. The current exercise moves back to just after the picked one.
+ */
+@Composable
+private fun SwitchExerciseDialog(
+    exercises: List<ExerciseWithPerformanceHistory>,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Do which exercise now?") },
+        text = {
+            Column {
+                exercises.forEach { exercise ->
+                    TextButton(
+                        onClick = { onPick(exercise.exercise.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(exercise.exercise.name, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 /**

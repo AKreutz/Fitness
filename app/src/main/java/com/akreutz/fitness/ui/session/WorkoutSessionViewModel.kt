@@ -39,7 +39,9 @@ sealed interface WorkoutSessionUiState {
      * is the one currently shown; [exerciseNumber]/[totalExercises] are 1-based, for progress
      * display (e.g. "2 of 4"). Within [exercise], [currentSet] describes where the user is.
      * [nextExercise] is whichever exercise follows [exercise], or `null` if it's the workout's
-     * last. [recoveryGoalSeconds] is [exercise]'s prescribed rest duration, for showing recovery
+     * last. [remainingExercises] are all the ones still to come after [exercise], any of which
+     * can be done next instead via [WorkoutSessionViewModel.switchTo] while [currentSet] is
+     * still the warm-up. [recoveryGoalSeconds] is [exercise]'s prescribed rest duration, for showing recovery
      * progress towards it; it's unrelated to whether the user is currently resting (see
      * [recoverySeconds]). When [exerciseToRate] is non-null, the just-finished exercise is
      * awaiting a perceived-effort rating (via [WorkoutSessionViewModel.rateExercise]) before the
@@ -54,6 +56,7 @@ sealed interface WorkoutSessionUiState {
         val exerciseNumber: Int,
         val totalExercises: Int,
         val nextExercise: ExerciseWithPerformanceHistory?,
+        val remainingExercises: List<ExerciseWithPerformanceHistory>,
         val currentSet: SetProgress,
         val recoverySeconds: Int?,
         val recoveryGoalSeconds: Int,
@@ -157,7 +160,25 @@ class WorkoutSessionViewModel(
      * been collected. */
     private var latestExercises: List<ExerciseWithPerformanceHistory>? = null
 
-    private val workout = repository.observeWorkout(workoutId)
+    /**
+     * The order the user has chosen for this session as exercise ids, or empty while the plan's
+     * own order applies. Exercises missing from it (shouldn't happen) go last, in plan order.
+     */
+    private val sessionOrder = MutableStateFlow<List<String>>(emptyList())
+
+    private val workout: Flow<WorkoutWithExercises?> =
+        combine(repository.observeWorkout(workoutId), sessionOrder) { workout, order ->
+            workout?.copy(exercises = workout.exercises.inSessionOrder(order))
+        }
+
+    private fun List<ExerciseWithPerformanceHistory>.inSessionOrder(
+        order: List<String>,
+    ): List<ExerciseWithPerformanceHistory> =
+        if (order.isEmpty()) {
+            this
+        } else {
+            sortedBy { order.indexOf(it.exercise.id).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE }
+        }
 
     /** Everything about session progress except the loaded [workout] itself. */
     private data class Progress(
@@ -200,6 +221,7 @@ class WorkoutSessionViewModel(
                         exerciseNumber = progress.exerciseIndex + 1,
                         totalExercises = exercises.size,
                         nextExercise = exercises.getOrNull(progress.exerciseIndex + 1),
+                        remainingExercises = exercises.drop(progress.exerciseIndex + 1),
                         currentSet = setProgress,
                         recoverySeconds = progress.recoverySeconds.takeIf { progress.resting },
                         recoveryGoalSeconds = exercise.exercise.restSeconds,
@@ -257,6 +279,23 @@ class WorkoutSessionViewModel(
             exerciseToRate.value = latestExercises?.getOrNull(exerciseIndex.value)
         } else {
             startRecoveryTimer()
+        }
+    }
+
+    /**
+     * Does the not-yet-done exercise [exerciseId] now instead of the current one, which moves
+     * back to just after it. Only possible at the current exercise's warm-up, before any of its
+     * sets are done, so no partial progress is lost; otherwise ignored.
+     */
+    fun switchTo(exerciseId: String) {
+        if (step.value != ExerciseStep.WarmUp || resting.value) return
+        if (exerciseToRate.value != null || exerciseToOfferWeightIncrease.value != null) return
+        val ids = latestExercises?.map { it.exercise.id } ?: return
+        val index = exerciseIndex.value
+        if (exerciseId !in ids.drop(index + 1)) return
+        sessionOrder.value = ids.toMutableList().apply {
+            remove(exerciseId)
+            add(index, exerciseId)
         }
     }
 
