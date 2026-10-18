@@ -15,11 +15,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +39,7 @@ import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
 import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.DraggableList
 
@@ -54,13 +55,16 @@ fun OnboardingScreen(
     repository: TrainingPlanRepository,
     modifier: Modifier = Modifier,
     onFinished: () -> Unit = {},
+    onCancel: (() -> Unit)? = null,
 ) {
     val viewModel: OnboardingViewModel = viewModel(
         factory = OnboardingViewModelFactory(repository),
     )
 
     when (viewModel.step) {
-        OnboardingStep.NAME_PLAN -> NamePlanStep(
+        OnboardingStep.NAME_PLAN -> {
+            if (onCancel != null) BackHandler(onBack = onCancel)
+            NamePlanStep(
             planName = viewModel.planName,
             onPlanNameChange = viewModel::updatePlanName,
             workouts = viewModel.workouts,
@@ -68,8 +72,10 @@ fun OnboardingScreen(
             onAddWorkout = viewModel::addWorkout,
             onRemoveWorkout = viewModel::removeWorkout,
             onNext = viewModel::proceedToAddExercises,
+            onCancel = onCancel,
             modifier = modifier,
-        )
+            )
+        }
         OnboardingStep.ADD_EXERCISES -> {
             BackHandler(onBack = viewModel::backToNamePlan)
             val weightStacks by viewModel.weightStacks.collectAsState(initial = emptyList())
@@ -101,6 +107,7 @@ private fun NamePlanStep(
     onAddWorkout: () -> Unit,
     onRemoveWorkout: (index: Int) -> Unit,
     onNext: () -> Unit,
+    onCancel: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val canProceed = planName.isNotBlank() && workouts.any { it.name.isNotBlank() }
@@ -108,7 +115,7 @@ private fun NamePlanStep(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(vertical = 144.dp),
+            .padding(top = 8.dp),
     ) {
         Text(
             text = "Create your training plan",
@@ -177,14 +184,20 @@ private fun NamePlanStep(
             }
         }
 
-        Button(
-            onClick = onNext,
-            enabled = canProceed,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Next")
+            if (onCancel != null) {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
+                    Text("Cancel")
+                }
+            }
+            Button(onClick = onNext, enabled = canProceed, modifier = Modifier.weight(1f)) {
+                Text("Next")
+            }
         }
     }
 }
@@ -232,7 +245,7 @@ private fun AddExercisesStep(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(vertical = 144.dp),
+            .padding(top = 8.dp),
     ) {
         Text(
             text = "Add your exercises",
@@ -368,29 +381,16 @@ private fun AddExercisesStep(
     val deleteTarget = exerciseForDeleteConfirm
     if (deleteTarget != null) {
         val (deleteWorkoutIndex, deleteExerciseIndex) = deleteTarget
-        AlertDialog(
-            onDismissRequest = { exerciseForDeleteConfirm = null },
-            title = { Text("Delete exercise") },
-            text = {
-                Text(
-                    "Delete \"${workouts[deleteWorkoutIndex].exercises[deleteExerciseIndex].name}\"?",
-                )
+        ConfirmDestructiveDialog(
+            title = "Delete \"${workouts[deleteWorkoutIndex].exercises[deleteExerciseIndex].name}\"?",
+            message = "This removes the exercise from the workout.",
+            confirmLabel = "Delete exercise",
+            dismissLabel = "Keep exercise",
+            onConfirm = {
+                onRemoveExercise(deleteWorkoutIndex, deleteExerciseIndex)
+                exerciseForDeleteConfirm = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onRemoveExercise(deleteWorkoutIndex, deleteExerciseIndex)
-                        exerciseForDeleteConfirm = null
-                    },
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { exerciseForDeleteConfirm = null }) {
-                    Text("Cancel")
-                }
-            },
+            onDismiss = { exerciseForDeleteConfirm = null },
         )
     }
 }

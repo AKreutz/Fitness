@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +54,7 @@ import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
 import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.DraggableList
 
@@ -241,54 +243,35 @@ private fun PlanEditorContent(
 
     val deleteWorkoutTarget = workoutPendingDelete
     if (deleteWorkoutTarget != null) {
-        AlertDialog(
-            onDismissRequest = { workoutPendingDelete = null },
-            title = { Text("Delete workout") },
-            text = {
-                Text(
-                    "Delete \"${deleteWorkoutTarget.name}\"? This removes its exercises and " +
-                        "completed-session history.",
-                )
+        val exerciseCount = plan.workouts
+            .firstOrNull { it.workout.id == deleteWorkoutTarget.id }?.exercises?.size ?: 0
+        ConfirmDestructiveDialog(
+            title = "Delete \"${deleteWorkoutTarget.name}\"?",
+            message = "This permanently removes its $exerciseCount " +
+                "${if (exerciseCount == 1) "exercise" else "exercises"} and its " +
+                "completed-session history. This can't be undone.",
+            confirmLabel = "Delete workout",
+            dismissLabel = "Keep workout",
+            onConfirm = {
+                onDeleteWorkout(deleteWorkoutTarget)
+                workoutPendingDelete = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDeleteWorkout(deleteWorkoutTarget)
-                        workoutPendingDelete = null
-                    },
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { workoutPendingDelete = null }) {
-                    Text("Cancel")
-                }
-            },
+            onDismiss = { workoutPendingDelete = null },
         )
     }
 
     val deleteExerciseTarget = exercisePendingDelete
     if (deleteExerciseTarget != null) {
-        AlertDialog(
-            onDismissRequest = { exercisePendingDelete = null },
-            title = { Text("Delete exercise") },
-            text = { Text("Delete \"${deleteExerciseTarget.name}\"?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDeleteExercise(deleteExerciseTarget)
-                        exercisePendingDelete = null
-                    },
-                ) {
-                    Text("Delete")
-                }
+        ConfirmDestructiveDialog(
+            title = "Delete \"${deleteExerciseTarget.name}\"?",
+            message = "This removes the exercise from the workout. This can't be undone.",
+            confirmLabel = "Delete exercise",
+            dismissLabel = "Keep exercise",
+            onConfirm = {
+                onDeleteExercise(deleteExerciseTarget)
+                exercisePendingDelete = null
             },
-            dismissButton = {
-                TextButton(onClick = { exercisePendingDelete = null }) {
-                    Text("Cancel")
-                }
-            },
+            onDismiss = { exercisePendingDelete = null },
         )
     }
 
@@ -437,7 +420,7 @@ private fun WorkoutNameDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(name.trim()) }, enabled = name.isNotBlank()) {
+            Button(onClick = { onConfirm(name.trim()) }, enabled = name.isNotBlank()) {
                 Text("Save")
             }
         },

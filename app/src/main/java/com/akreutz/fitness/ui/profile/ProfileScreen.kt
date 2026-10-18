@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,7 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 
@@ -116,30 +115,21 @@ fun ProfileScreen(
 
             val deleteTarget = planPendingDelete
             if (deleteTarget != null) {
-                AlertDialog(
-                    onDismissRequest = { planPendingDelete = null },
-                    title = { Text("Delete plan") },
-                    text = {
-                        Text(
-                            "Delete \"${deleteTarget.trainingPlan.name}\"? This removes its " +
-                                "workouts and completed-session history.",
-                        )
+                val workoutCount = deleteTarget.workouts.size
+                val sessionCount = uiState.completedSessionCounts[deleteTarget.trainingPlan.id] ?: 0
+                ConfirmDestructiveDialog(
+                    title = "Delete \"${deleteTarget.trainingPlan.name}\"?",
+                    message = "This permanently removes " +
+                        "$workoutCount ${if (workoutCount == 1) "workout" else "workouts"} and " +
+                        "$sessionCount completed ${if (sessionCount == 1) "session" else "sessions"}. " +
+                        "This can't be undone.",
+                    confirmLabel = "Delete plan",
+                    dismissLabel = "Keep plan",
+                    onConfirm = {
+                        onDeletePlan(deleteTarget.trainingPlan)
+                        planPendingDelete = null
                     },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                onDeletePlan(deleteTarget.trainingPlan)
-                                planPendingDelete = null
-                            },
-                        ) {
-                            Text("Delete")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { planPendingDelete = null }) {
-                            Text("Cancel")
-                        }
-                    },
+                    onDismiss = { planPendingDelete = null },
                 )
             }
         }

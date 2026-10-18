@@ -14,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,25 +21,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.akreutz.fitness.ui.common.WeightStackDialog
+import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
-import kotlinx.coroutines.launch
 
 /**
  * Lists every saved [WeightStack] (reusable, named sets of a cable machine's fixed weight levels,
@@ -104,10 +101,9 @@ fun WeightStacksScreen(
     }
 
     if (showCreateDialog) {
-        WeightStackNameLevelsDialog(
+        WeightStackDialog(
             title = "New weight stack",
-            initialName = "",
-            initialLevelsKg = emptyList(),
+            confirmLabel = "Create",
             onDismiss = { showCreateDialog = false },
             onConfirm = { name, levelsKg ->
                 viewModel.createWeightStack(name, levelsKg)
@@ -118,8 +114,9 @@ fun WeightStacksScreen(
 
     val editTarget = stackDialogTarget
     if (editTarget != null) {
-        WeightStackNameLevelsDialog(
+        WeightStackDialog(
             title = "Edit weight stack",
+            confirmLabel = "Save",
             initialName = editTarget.name,
             initialLevelsKg = editTarget.levelsKg,
             onDismiss = { stackDialogTarget = null },
@@ -132,30 +129,16 @@ fun WeightStacksScreen(
 
     val deleteTarget = stackPendingDelete
     if (deleteTarget != null) {
-        AlertDialog(
-            onDismissRequest = { stackPendingDelete = null },
-            title = { Text("Delete weight stack") },
-            text = {
-                Text(
-                    "Delete \"${deleteTarget.name}\"? Any exercise using it will fall back to " +
-                        "typing its next weight manually.",
-                )
+        ConfirmDestructiveDialog(
+            title = "Delete \"${deleteTarget.name}\"?",
+            message = "Any exercise using it will fall back to typing its next weight manually.",
+            confirmLabel = "Delete stack",
+            dismissLabel = "Keep stack",
+            onConfirm = {
+                viewModel.deleteWeightStack(deleteTarget)
+                stackPendingDelete = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteWeightStack(deleteTarget)
-                        stackPendingDelete = null
-                    },
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { stackPendingDelete = null }) {
-                    Text("Cancel")
-                }
-            },
+            onDismiss = { stackPendingDelete = null },
         )
     }
 }
@@ -205,63 +188,3 @@ private fun WeightStackCard(
 /** A weight level formatted compactly, e.g. "5" or "5.5" — no trailing zero. */
 private fun formatLevel(kg: Double): String =
     if (kg == kg.toLong().toDouble()) kg.toLong().toString() else kg.toString()
-
-/** Prompts for a [WeightStack]'s name and its levels, typed as comma-separated kg values. */
-@Composable
-private fun WeightStackNameLevelsDialog(
-    title: String,
-    initialName: String,
-    initialLevelsKg: List<Double>,
-    onDismiss: () -> Unit,
-    onConfirm: suspend (name: String, levelsKg: List<Double>) -> Unit,
-) {
-    val coroutineScope = rememberCoroutineScope()
-    var name by remember { mutableStateOf(initialName) }
-    var levelsText by remember {
-        mutableStateOf(initialLevelsKg.joinToString(", ") { it.toString() })
-    }
-
-    val levelTokens = levelsText.split(",")
-        .map { it.trim().replace(',', '.') }
-        .filter { it.isNotEmpty() }
-        .map { it.toDoubleOrNull() }
-    val parsedLevels = levelTokens.filterNotNull()
-    val canConfirm = name.isNotBlank() && levelTokens.isNotEmpty() &&
-        levelTokens.size == parsedLevels.size && parsedLevels.all { it > 0 }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Stack name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = levelsText,
-                    onValueChange = { levelsText = it },
-                    label = { Text("Weight levels (kg), comma-separated") },
-                    placeholder = { Text("5, 10, 15, 20") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { coroutineScope.launch { onConfirm(name, parsedLevels) } },
-                enabled = canConfirm,
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
-    )
-}

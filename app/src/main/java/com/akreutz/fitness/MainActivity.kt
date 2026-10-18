@@ -355,6 +355,7 @@ private fun HomeScreen(
                     OnboardingScreen(
                         repository = trainingPlanRepository,
                         onFinished = { showCreatePlan = false },
+                        onCancel = { showCreatePlan = false },
                         modifier = Modifier.padding(innerPadding),
                     )
                 } else {

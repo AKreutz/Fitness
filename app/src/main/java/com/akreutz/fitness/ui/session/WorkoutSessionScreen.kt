@@ -7,14 +7,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,12 +40,21 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cable
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Surface
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,8 +82,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.FitnessApplication
+import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.common.label
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
@@ -78,6 +104,7 @@ import com.akreutz.fitness.ui.theme.PlateGreen10
 import com.akreutz.fitness.ui.theme.PlateWhite5
 import com.akreutz.fitness.ui.theme.PlateYellow15
 import com.akreutz.fitness.ui.theme.SlateBlueContainer
+import com.akreutz.fitness.ui.theme.effortColors
 import java.util.Locale
 import kotlin.math.pow
 
@@ -268,6 +295,8 @@ private fun InProgressContent(
 
     if (cancelConfirmationShown) {
         CancelWorkoutDialog(
+            exercisesFinished = state.exerciseNumber - 1,
+            totalExercises = state.totalExercises,
             onConfirm = {
                 cancelConfirmationShown = false
                 onCancel()
@@ -281,34 +310,86 @@ private fun InProgressContent(
  * Lets the user pick which of the [exercises] still to come to do now, e.g. because the equipment
  * for the current one is taken. The current exercise moves back to just after the picked one.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwitchExerciseDialog(
     exercises: List<ExerciseWithPerformanceHistory>,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Do which exercise now?") },
-        text = {
-            Column {
-                exercises.forEach { exercise ->
-                    TextButton(
-                        onClick = { onPick(exercise.exercise.id) },
-                        modifier = Modifier.fillMaxWidth(),
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+        ) {
+            Text("Do which exercise now?", style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = "The current exercise moves back to just after your pick.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
+            )
+            exercises.forEachIndexed { index, item ->
+                val exercise = item.exercise
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 68.dp)
+                        .clickable { onPick(exercise.id) }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(exercise.exercise.name, modifier = Modifier.fillMaxWidth())
+                        Icon(
+                            imageVector = when (exercise.type) {
+                                ExerciseType.FREE_WEIGHTS -> Icons.Filled.FitnessCenter
+                                ExerciseType.CABLE -> Icons.Filled.Cable
+                            },
+                            contentDescription = exercise.type.label(),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(exercise.name, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "${exercise.sets} sets · ${RepScheme.format(exercise.reps)} reps · " +
+                                "${formatWeightCompact(exercise.weightKg)} kg",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (index == 0) {
+                        Text(
+                            text = "Next",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.tertiaryContainer)
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) {
                 Text("Cancel")
             }
-        },
-    )
+        }
+    }
 }
 
 /**
@@ -316,21 +397,26 @@ private fun SwitchExerciseDialog(
  * progress (no partial session or ratings are saved).
  */
 @Composable
-private fun CancelWorkoutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Cancel workout?") },
-        text = { Text("Your progress in this workout won't be saved.") },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Cancel workout")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Keep going")
-            }
-        },
+private fun CancelWorkoutDialog(
+    exercisesFinished: Int,
+    totalExercises: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val progress = if (exercisesFinished > 0) {
+        "You've finished $exercisesFinished of $totalExercises exercises. "
+    } else {
+        ""
+    }
+    ConfirmDestructiveDialog(
+        title = "Discard this workout?",
+        message = "${progress}Nothing from this session will be saved.",
+        confirmLabel = "Discard",
+        dismissLabel = "Keep going",
+        icon = null,
+        keepIsPrimary = true,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
     )
 }
 
@@ -547,160 +633,239 @@ private fun UpNextRow(exercise: ExerciseWithPerformanceHistory, modifier: Modifi
  * Prompts the user to rate how hard [exerciseName] felt, right after finishing its last set.
  * Not dismissible without picking a rating, since the session can't move on without one.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RateEffortDialog(exerciseName: String, onRate: (PerceivedEffort) -> Unit) {
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = {},
-        title = { Text("How did $exerciseName feel?") },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+        sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { it != SheetValue.Hidden },
+        ),
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column {
+                Text(
+                    text = exerciseName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text("How hard was that?", style = MaterialTheme.typography.titleLarge)
+            }
+            EffortOption(PerceivedEffort.EASY, "Easy", "Could have done 3+ more reps", onRate)
+            EffortOption(PerceivedEffort.MEDIUM, "Medium", "1–2 reps left in the tank", onRate)
+            EffortOption(PerceivedEffort.HARD, "Hard", "At or near failure", onRate)
+        }
+    }
+}
+
+/** One tappable rating row in [RateEffortDialog], filled with the effort's theme color. */
+@Composable
+private fun EffortOption(
+    effort: PerceivedEffort,
+    label: String,
+    hint: String,
+    onRate: (PerceivedEffort) -> Unit,
+) {
+    val onEffort = MaterialTheme.effortColors.onEffort
+    Surface(
+        onClick = { onRate(effort) },
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.effortColors.forEffort(effort),
+        contentColor = onEffort,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Three bars, filled up to the effort's level, as a color-independent cue.
+            Row(
+                modifier = Modifier.size(28.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Button(onClick = { onRate(PerceivedEffort.EASY) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Easy")
-                }
-                Button(onClick = { onRate(PerceivedEffort.MEDIUM) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Medium")
-                }
-                Button(onClick = { onRate(PerceivedEffort.HARD) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Hard")
+                val barHeights = listOf(10.dp, 18.dp, 28.dp)
+                barHeights.forEachIndexed { index, barHeight ->
+                    Box(
+                        modifier = Modifier
+                            .width(6.dp)
+                            .height(barHeight)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(onEffort.copy(alpha = if (index <= effort.ordinal) 1f else 0.25f)),
+                    )
                 }
             }
-        },
-        confirmButton = {},
-    )
+            Column {
+                Text(label, style = MaterialTheme.typography.titleMedium)
+                Text(hint, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
 }
 
 /**
- * Prompts the user to raise [exercise]'s prescribed weight for next time, shown after they rate
- * it "easy" effort for the second session in a row. Not dismissible without answering, since the
- * session can't move on without one. For a [ExerciseType.CABLE] exercise assigned a
- * [WeightStack] (via [Exercise.weightStackId]) with a level above its current weight, that next
- * level is prefilled but still editable, in case the user wants a different weight just this once
- * (e.g. skipping a level, or a weight the stack doesn't list). A cable exercise with no stack
- * assigned (or already at/above its top level) falls back to typing the next weight level with no
- * prefill, since cable weight levels generally aren't evenly spaced and
- * [Exercise.weightIncrementKg] doesn't apply. For free-weight exercises, the increase is prefilled
- * from [Exercise.weightIncrementKg] but editable too, in case a different bump makes sense just
- * this once. [onRespond] receives the new weight to persist, or `null` to keep the exercise's
- * current one.
+ * Offers to raise [exercise]'s prescribed weight for next time, shown after they rate it "easy"
+ * for the second session in a row. Not dismissible without answering, since the session can't move
+ * on without one. The old and new weight are shown side by side, and the new one can be changed
+ * with preset chips and a stepper. The chips are the exercise's increment (free weights), or the
+ * levels of its [WeightStack] above the current weight (cable). A cable exercise without a stack
+ * only gets the stepper, since its levels aren't evenly spaced and [Exercise.weightIncrementKg]
+ * doesn't apply. [onRespond] receives the new weight to persist, or `null` to keep the current one.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WeightIncreaseOfferDialog(
     exercise: ExerciseWithPerformanceHistory,
     weightStacks: List<WeightStack>,
     onRespond: (Double?) -> Unit,
 ) {
+    val current = exercise.exercise.weightKg
+    val isCable = exercise.exercise.type == ExerciseType.CABLE
     val stack = weightStacks.firstOrNull { it.id == exercise.exercise.weightStackId }
-    val nextStackLevelKg = stack?.let {
-        WeightStack.nextLevelAbove(it.levelsKg, exercise.exercise.weightKg)
-    }
-
-    if (exercise.exercise.type == ExerciseType.CABLE && nextStackLevelKg != null) {
-        var weightText by remember { mutableStateOf(formatWeightCompact(nextStackLevelKg)) }
-        val newWeightKg = weightText.replace(',', '.').toDoubleOrNull()
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Increase the weight?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        String.format(
-                            Locale.US,
-                            "%s has felt easy twice in a row. Raise it from %.1f KG for next " +
-                                "time?",
-                            exercise.exercise.name,
-                            exercise.exercise.weightKg,
-                        ),
-                    )
-                    OutlinedTextField(
-                        value = weightText,
-                        onValueChange = { weightText = it },
-                        label = { Text("Next weight (kg)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { onRespond(newWeightKg) },
-                    enabled = newWeightKg != null && newWeightKg >= 0,
-                ) { Text("Increase") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { onRespond(null) }) { Text("Keep as is") }
-            },
-        )
-    } else if (exercise.exercise.type == ExerciseType.CABLE) {
-        var weightText by remember { mutableStateOf("") }
-        val newWeightKg = weightText.replace(',', '.').toDoubleOrNull()
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Increase the weight?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "${exercise.exercise.name} has felt easy twice in a row. " +
-                            "What weight level should it use next time?",
-                    )
-                    OutlinedTextField(
-                        value = weightText,
-                        onValueChange = { weightText = it },
-                        label = { Text("Next weight (kg)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { onRespond(newWeightKg) },
-                    enabled = newWeightKg != null && newWeightKg >= 0,
-                ) { Text("Increase") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { onRespond(null) }) { Text("Keep as is") }
-            },
-        )
+    val stackLevels = if (isCable && stack != null) {
+        stack.levelsKg.filter { it > current }.sorted().take(5)
     } else {
-        var incrementText by remember { mutableStateOf(exercise.exercise.weightIncrementKg.toString()) }
-        val incrementKg = incrementText.replace(',', '.').toDoubleOrNull()
-        AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Increase the weight?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        String.format(
-                            Locale.US,
-                            "%s has felt easy twice in a row. Raise it from %.1f KG for next time?",
-                            exercise.exercise.name,
-                            exercise.exercise.weightKg,
-                        ),
-                    )
-                    OutlinedTextField(
-                        value = incrementText,
-                        onValueChange = { incrementText = it },
-                        label = { Text("Weight increase (kg)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { onRespond(exercise.exercise.weightKg + incrementKg!!) },
-                    enabled = incrementKg != null && incrementKg >= 0,
-                ) { Text("Increase") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { onRespond(null) }) { Text("Keep as is") }
-            },
-        )
+        emptyList()
     }
+    val increment = exercise.exercise.weightIncrementKg.takeIf { it > 0 } ?: 2.5
+    val stepKg = if (isCable) 2.5 else increment / 2
+    // Offsets from the current weight for the free-weight chips, e.g. +1.25, +2.5, +5.
+    val offsets = listOf(increment / 2, increment, increment * 2)
+    val initial = when {
+        stackLevels.isNotEmpty() -> stackLevels.first()
+        isCable -> current + 2.5
+        else -> current + increment
+    }
+    var newWeight by remember { mutableStateOf(initial) }
+    var weightText by remember { mutableStateOf(formatKg(initial)) }
+    // Typed text that doesn't parse leaves newWeight at its last valid value, so check it too.
+    val textValid = weightText.replace(',', '.').toDoubleOrNull() != null
+    fun setWeight(weight: Double) {
+        newWeight = weight
+        weightText = formatKg(weight)
+    }
+    val canUse = textValid && newWeight > current
+
+    // The field is sized to its text, so the number and the "kg" after it read as one centered unit.
+    val numberStyle = MaterialTheme.typography.displaySmall.copy(
+        color = MaterialTheme.colorScheme.onSurface,
+        fontWeight = FontWeight.SemiBold,
+    )
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val numberWidth = with(density) {
+        textMeasurer.measure(weightText.ifEmpty { "0" }, numberStyle).size.width.toDp()
+    } + 4.dp
+
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Time to go heavier?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    "${exercise.exercise.name} has felt easy twice in a row.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (stackLevels.isEmpty()) {
+                        FilledTonalIconButton(onClick = { setWeight((newWeight - stepKg).coerceAtLeast(0.0)) }) {
+                            Icon(Icons.Filled.Remove, contentDescription = "Decrease by ${formatKg(stepKg)} kg")
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            BasicTextField(
+                                value = weightText,
+                                onValueChange = { text ->
+                                    weightText = text
+                                    text.replace(',', '.').toDoubleOrNull()?.let { newWeight = it }
+                                },
+                                textStyle = numberStyle,
+                                singleLine = true,
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.width(numberWidth),
+                            )
+                            Text(
+                                " kg",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                        }
+                        Text(
+                            text = if (canUse) "next time (+${formatKg(newWeight - current)} kg)" else "next time",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                    if (stackLevels.isEmpty()) {
+                        FilledTonalIconButton(onClick = { setWeight(newWeight + stepKg) }) {
+                            Icon(Icons.Filled.Add, contentDescription = "Increase by ${formatKg(stepKg)} kg")
+                        }
+                    }
+                }
+                val options = if (stackLevels.isNotEmpty()) {
+                    stackLevels.map { it to "${formatKg(it)} kg" }
+                } else if (isCable) {
+                    emptyList()
+                } else {
+                    offsets.map { current + it to "+${formatKg(it)} kg" }
+                }
+                if (options.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    ) {
+                        options.forEach { (weight, label) ->
+                            FilterChip(
+                                selected = newWeight == weight,
+                                onClick = { setWeight(weight) },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                },
+                                modifier = Modifier.width(85.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onRespond(newWeight) }, enabled = canUse) {
+                Text("Use ${formatKg(newWeight)} kg")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = { onRespond(null) }) { Text("Keep ${formatKg(current)} kg") }
+        },
+    )
 }
+
+/** A weight with up to two decimals and no trailing zeros, e.g. "60", "62.5" or "1.25". */
+private fun formatKg(kg: Double): String =
+    String.format(Locale.US, "%.2f", kg).trimEnd('0').trimEnd('.')
 
 /**
  * Card for the exercise currently being guided through: during warm-up, just says so; otherwise

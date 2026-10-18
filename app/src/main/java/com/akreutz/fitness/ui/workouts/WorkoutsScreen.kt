@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +48,7 @@ import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.performanceOn
+import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
 import com.akreutz.fitness.ui.theme.effortColors
 import java.time.Instant
 import java.time.LocalDate
@@ -259,24 +259,14 @@ fun WorkoutsDeleteLastConfirmationDialog(
     onConfirm: (WorkoutSession) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Delete workout") },
-        text = {
-            Text(
-                "Delete the last completed \"${session.workout.name}\" session? This can't be undone.",
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(session.session) }) {
-                Text("Delete")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        },
+    ConfirmDestructiveDialog(
+        title = "Delete \"${session.workout.name}\" session?",
+        message = "This permanently removes your most recent completed session of this " +
+            "workout. This can't be undone.",
+        confirmLabel = "Delete session",
+        dismissLabel = "Keep session",
+        onConfirm = { onConfirm(session.session) },
+        onDismiss = onDismiss,
     )
 }
 
