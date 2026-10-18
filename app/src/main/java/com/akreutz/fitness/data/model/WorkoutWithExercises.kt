@@ -17,3 +17,7 @@ data class WorkoutWithExercises(
     )
     val exercises: List<ExerciseWithPerformanceHistory>,
 )
+
+/** Room's `@Relation` gives no ordering guarantee, so sort the exercises by [Exercise.position]. */
+fun WorkoutWithExercises.sortedByPosition(): WorkoutWithExercises =
+    copy(exercises = exercises.sortedBy { it.exercise.position })

@@ -17,3 +17,7 @@ data class TrainingPlanWithWorkouts(
     )
     val workouts: List<WorkoutWithExercises>,
 )
+
+/** Sorts the workouts by [Workout.position] and each workout's exercises by theirs. */
+fun TrainingPlanWithWorkouts.sortedByPosition(): TrainingPlanWithWorkouts =
+    copy(workouts = workouts.sortedBy { it.workout.position }.map { it.sortedByPosition() })

@@ -14,6 +14,7 @@ import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
+import com.akreutz.fitness.data.model.sortedByPosition
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.model.WorkoutSession
@@ -41,11 +42,11 @@ class TrainingPlanRepository(
 ) {
 
     fun observeTrainingPlans(): Flow<List<TrainingPlanWithWorkouts>> =
-        database.trainingPlanDao().observeAll()
+        database.trainingPlanDao().observeAll().map { plans -> plans.map { it.sortedByPosition() } }
 
     /** The workout with [workoutId] together with its exercises, or `null` if it doesn't exist. */
     fun observeWorkout(workoutId: String): Flow<WorkoutWithExercises?> =
-        database.workoutDao().observeById(workoutId)
+        database.workoutDao().observeById(workoutId).map { it?.sortedByPosition() }
 
     /** Every completed [WorkoutSession], each with the [Workout] it was for, most recent first. */
     fun observeWorkoutSessions(): Flow<List<WorkoutSessionWithWorkout>> =
@@ -93,12 +94,16 @@ class TrainingPlanRepository(
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun observeActiveTrainingPlan(): Flow<TrainingPlanWithWorkouts?> =
         activePlanPreferences.activeTrainingPlanId.flatMapLatest { id ->
-            if (id == null) flowOf(null) else database.trainingPlanDao().observeById(id)
+            if (id == null) {
+                flowOf(null)
+            } else {
+                database.trainingPlanDao().observeById(id).map { it?.sortedByPosition() }
+            }
         }
 
     /** The plan with [trainingPlanId], or `null` if it doesn't exist (e.g. was just deleted). */
     fun observeTrainingPlan(trainingPlanId: String): Flow<TrainingPlanWithWorkouts?> =
-        database.trainingPlanDao().observeById(trainingPlanId)
+        database.trainingPlanDao().observeById(trainingPlanId).map { it?.sortedByPosition() }
 
     /**
      * Creates a new [TrainingPlan] with the given [name] and one [Workout] per entry in
