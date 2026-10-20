@@ -13,11 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -49,11 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,9 +55,11 @@ import androidx.compose.ui.window.DialogProperties
 import com.akreutz.fitness.data.model.DraftExercise
 import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExerciseType
+import com.akreutz.fitness.data.model.PlateBreakdown
 import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.WeightStack
-import java.util.Locale
+import com.akreutz.fitness.data.model.formatWeight
+import com.akreutz.fitness.data.model.nearestLevelKg
 
 /** How much the weight and rest steppers move per tap. */
 private const val WEIGHT_STEP_KG = 2.5
@@ -112,6 +107,21 @@ fun AddExerciseDialog(
     var showCreateWeightStack by remember { mutableStateOf(false) }
     var restSeconds by remember {
         mutableIntStateOf(initial?.restSeconds ?: Exercise.DEFAULT_REST_SECONDS)
+    }
+
+    // Whether each weight field is being typed in lb. It is only ever an input unit: the value is
+    // converted to kg, rounded to what can actually be loaded, and kept in kg.
+    var weightLb by remember { mutableStateOf(false) }
+    var weightIncrementLb by remember { mutableStateOf(false) }
+    val stackLevelsKg = weightStacks.firstOrNull { it.id == weightStackId }?.levelsKg.orEmpty()
+    val roundWeightKg: (Double) -> Double = if (type == ExerciseType.CABLE) {
+        { nearestLevelKg(it, stackLevelsKg) }
+    } else {
+        PlateBreakdown::nearestLoadable
+    }
+    // A positive increment never rounds down to nothing.
+    val roundIncrementKg: (Double) -> Double = {
+        PlateBreakdown.nearestLoadable(it).coerceAtLeast(if (it > 0) PlateBreakdown.LOAD_STEP_KG else 0.0)
     }
 
     val weightKg = weightText.replace(',', '.').toDoubleOrNull()
@@ -233,6 +243,10 @@ fun AddExerciseDialog(
                 // Free weights also get a second stepper for how much to add after two easy
                 // sessions; cable weights follow their stack's levels instead.
                 val showIncrement = type == ExerciseType.FREE_WEIGHTS
+                val fieldStyle = MaterialTheme.typography.titleLarge.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Box(modifier = Modifier.weight(1f)) {
                         FormSection("Starting weight") {
@@ -246,12 +260,17 @@ fun AddExerciseDialog(
                                 minusDescription = "Lighter by ${formatKg(WEIGHT_STEP_KG)} kg",
                                 plusDescription = "Heavier by ${formatKg(WEIGHT_STEP_KG)} kg",
                             ) {
-                                KgField(
-                                    text = weightText,
-                                    onTextChange = { weightText = it },
-                                    compact = true,
+                                WeightField(
+                                    kgText = weightText,
+                                    onKgTextChange = { weightText = it },
+                                    lbMode = weightLb,
+                                    onLbModeChange = { weightLb = it },
+                                    roundKg = roundWeightKg,
+                                    style = fieldStyle,
+                                    unitBottomPadding = 4.dp,
                                 )
                             }
+                            if (weightLb) KgPreview(weightKg)
                         }
                     }
                     if (showIncrement) {
@@ -271,12 +290,17 @@ fun AddExerciseDialog(
                                     minusDescription = "Smaller increase",
                                     plusDescription = "Bigger increase",
                                 ) {
-                                    KgField(
-                                        text = weightIncrementText,
-                                        onTextChange = { weightIncrementText = it },
-                                        compact = true,
+                                    WeightField(
+                                        kgText = weightIncrementText,
+                                        onKgTextChange = { weightIncrementText = it },
+                                        lbMode = weightIncrementLb,
+                                        onLbModeChange = { weightIncrementLb = it },
+                                        roundKg = roundIncrementKg,
+                                        style = fieldStyle,
+                                        unitBottomPadding = 4.dp,
                                     )
                                 }
+                                if (weightIncrementLb) KgPreview(weightIncrementKg)
                             }
                         }
                     } else {
@@ -418,56 +442,20 @@ private fun StepperRow(
     }
 }
 
-/**
- * An editable weight shown as a large number followed by "kg". The field is sized to its text so
- * the number and unit read as one centered unit.
- */
+/** The kg value an lb entry was converted to, shown under its field. */
 @Composable
-private fun KgField(text: String, onTextChange: (String) -> Unit, compact: Boolean = false) {
-    val style = (if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall).copy(
-        color = MaterialTheme.colorScheme.onSurface,
-        fontWeight = FontWeight.SemiBold,
+private fun KgPreview(kg: Double?) {
+    Text(
+        text = if (kg != null) "= ${formatWeight(kg)} kg" else " ",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.tertiary,
         textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
     )
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    // An empty field still gets room for the placeholder "0" so it stays tappable.
-    val fieldWidth = with(density) {
-        textMeasurer.measure(text.ifEmpty { "0" }, style).size.width.toDp()
-    } + 4.dp
-    Row(verticalAlignment = Alignment.Bottom) {
-        BasicTextField(
-            value = text,
-            onValueChange = onTextChange,
-            textStyle = style,
-            singleLine = true,
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            decorationBox = { innerTextField ->
-                Box(contentAlignment = Alignment.Center) {
-                    if (text.isEmpty()) {
-                        Text(
-                            text = "0",
-                            style = style.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                        )
-                    }
-                    innerTextField()
-                }
-            },
-            modifier = Modifier.width(fieldWidth),
-        )
-        Text(
-            text = " kg",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-    }
 }
 
 /** A weight with up to two decimals and no trailing zeros, e.g. "60", "62.5" or "1.25". */
-private fun formatKg(kg: Double): String =
-    String.format(Locale.US, "%.2f", kg).trimEnd('0').trimEnd('.')
+private fun formatKg(kg: Double): String = formatWeight(kg)
 
 fun ExerciseType.label(): String = when (this) {
     ExerciseType.FREE_WEIGHTS -> "Free weights"

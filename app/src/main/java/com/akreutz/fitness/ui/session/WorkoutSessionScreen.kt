@@ -35,10 +35,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material.icons.filled.Add
@@ -115,10 +111,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.akreutz.fitness.FitnessApplication
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.common.WeightField
 import com.akreutz.fitness.ui.common.pressScale
 import com.akreutz.fitness.ui.common.dialogEnter
 import com.akreutz.fitness.ui.common.label
@@ -128,6 +124,7 @@ import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PlateBreakdown
 import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.WeightStack
+import com.akreutz.fitness.data.model.nearestLevelKg
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.theme.OnPlateChrome1_25
@@ -1022,6 +1019,13 @@ private fun WeightIncreaseOfferDialog(
     }
     var newWeight by remember { mutableStateOf(initial) }
     var weightText by remember { mutableStateOf(formatKg(initial)) }
+    // Typing in lb is input only: it's converted to the closest weight that can be loaded or
+    // selected, and everything else stays in kg.
+    var lbMode by remember { mutableStateOf(false) }
+    val roundKg: (Double) -> Double = when {
+        isCable -> { kg -> nearestLevelKg(kg, stack?.levelsKg.orEmpty().filter { it > current }) }
+        else -> PlateBreakdown::nearestLoadable
+    }
     // Typed text that doesn't parse leaves newWeight at its last valid value, so check it too.
     val textValid = weightText.replace(',', '.').toDoubleOrNull() != null
     fun setWeight(weight: Double) {
@@ -1030,16 +1034,10 @@ private fun WeightIncreaseOfferDialog(
     }
     val canUse = textValid && newWeight > current
 
-    // The field is sized to its text, so the number and the "kg" after it read as one centered unit.
     val numberStyle = MaterialTheme.typography.displaySmall.copy(
         color = MaterialTheme.colorScheme.onSurface,
         fontWeight = FontWeight.SemiBold,
     )
-    val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val numberWidth = with(density) {
-        textMeasurer.measure(weightText.ifEmpty { "0" }, numberStyle).size.width.toDp()
-    } + 4.dp
 
     AlertDialog(
         onDismissRequest = {},
@@ -1062,28 +1060,26 @@ private fun WeightIncreaseOfferDialog(
                         }
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            BasicTextField(
-                                value = weightText,
-                                onValueChange = { text ->
-                                    weightText = text
-                                    text.replace(',', '.').toDoubleOrNull()?.let { newWeight = it }
-                                },
-                                textStyle = numberStyle,
-                                singleLine = true,
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier.width(numberWidth),
-                            )
-                            Text(
-                                " kg",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 6.dp),
-                            )
-                        }
+                        // The field is sized to its text, so the number and the unit after it read
+                        // as one centered unit.
+                        WeightField(
+                            kgText = weightText,
+                            onKgTextChange = { text ->
+                                weightText = text
+                                text.replace(',', '.').toDoubleOrNull()?.let { newWeight = it }
+                            },
+                            lbMode = lbMode,
+                            onLbModeChange = { lbMode = it },
+                            roundKg = roundKg,
+                            style = numberStyle,
+                            unitBottomPadding = 6.dp,
+                        )
                         Text(
-                            text = if (canUse) "next time (+${formatKg(newWeight - current)} kg)" else "next time",
+                            text = when {
+                                !canUse -> "next time"
+                                lbMode -> "= ${formatKg(newWeight)} kg · next time (+${formatKg(newWeight - current)} kg)"
+                                else -> "next time (+${formatKg(newWeight - current)} kg)"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.tertiary,
                         )

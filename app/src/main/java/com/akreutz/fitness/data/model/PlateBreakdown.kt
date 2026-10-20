@@ -14,6 +14,13 @@ object PlateBreakdown {
     /** Available plate sizes, heaviest first, in KG. */
     val PLATE_SIZES_KG: List<Double> = listOf(20.0, 15.0, 10.0, 5.0, 2.5, 1.25)
 
+    /** The smallest change in total weight the plates can make: a pair of the smallest plates. */
+    val LOAD_STEP_KG: Double = PLATE_SIZES_KG.min() * 2
+
+    /** [kg] rounded to the closest total weight the plates can make, never below zero. */
+    fun nearestLoadable(kg: Double): Double =
+        ((kg / LOAD_STEP_KG).roundToLong() * LOAD_STEP_KG).coerceAtLeast(0.0)
+
     /**
      * The plates needed on one side of the bar to reach [totalWeightKg], largest first, or an
      * empty list if [totalWeightKg] is at or below [BAR_WEIGHT_KG] (nothing to load) or the

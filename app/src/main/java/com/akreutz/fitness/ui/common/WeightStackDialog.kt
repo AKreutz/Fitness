@@ -41,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.akreutz.fitness.data.model.lbToKg
+import com.akreutz.fitness.data.model.roundToTenthKg
 import kotlinx.coroutines.launch
 
 /**
@@ -64,8 +66,13 @@ fun WeightStackDialog(
     var levels by remember { mutableStateOf(initialLevelsKg.distinct().sorted()) }
     var levelInput by remember { mutableStateOf("") }
 
+    // Typing in lb is input only: levels are converted to kg (to 0.1) as they are added.
+    var lbMode by remember { mutableStateOf(false) }
+
     val tokens = levelInput.split(',', ' ').filter { it.isNotBlank() }
-    val parsed = tokens.map { it.toDoubleOrNull() }
+    val parsed = tokens.map { token ->
+        token.toDoubleOrNull()?.let { if (lbMode) roundToTenthKg(lbToKg(it)) else it }
+    }
     val badToken = tokens.zip(parsed).firstOrNull { (_, value) -> value == null || value <= 0 }?.first
     val inputError = badToken?.let { token ->
         val fixed = token.replace('O', '0').replace('o', '0')
@@ -156,8 +163,20 @@ fun WeightStackDialog(
                     OutlinedTextField(
                         value = levelInput,
                         onValueChange = { levelInput = it },
-                        label = { Text("Add level (kg)") },
+                        label = { Text(if (lbMode) "Add level (lb)" else "Add level (kg)") },
                         placeholder = { Text("20") },
+                        trailingIcon = {
+                            UnitToggle(
+                                lbMode = lbMode,
+                                onLbModeChange = { lbMode = it },
+                                modifier = Modifier.padding(end = 12.dp),
+                            )
+                        },
+                        supportingText = if (lbMode && canAdd) {
+                            { Text("= ${parsed.filterNotNull().joinToString(", ") { formatStackLevel(it) }} kg") }
+                        } else {
+                            null
+                        },
                         isError = inputError != null,
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
