@@ -378,7 +378,7 @@ private fun EffortLegend(modifier: Modifier = Modifier) {
  * the left), and the first/last dates are labeled on the x-axis.
  */
 @Composable
-private fun WeightLineChart(dataPoints: List<WeightDataPoint>, modifier: Modifier = Modifier) {
+internal fun WeightLineChart(dataPoints: List<WeightDataPoint>, modifier: Modifier = Modifier) {
     val effortColors = MaterialTheme.effortColors
     LineChart(
         points = dataPoints.map {

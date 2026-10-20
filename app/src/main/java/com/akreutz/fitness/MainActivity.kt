@@ -390,11 +390,17 @@ private fun HomeScreen(
             label = "tab",
         ) { tab ->
             when (tab) {
-                0 -> ActiveTrainingPlanView(
-                    workouts = (trainingPlan as? ActiveTrainingPlanUiState.Loaded)
-                        ?.workoutsNextFirst.orEmpty(),
-                    modifier = Modifier.padding(innerPadding),
-                )
+                0 -> {
+                    val weightStacks by homeViewModel.weightStacks.collectAsState()
+                    ActiveTrainingPlanView(
+                        workouts = (trainingPlan as? ActiveTrainingPlanUiState.Loaded)
+                            ?.workoutsNextFirst.orEmpty(),
+                        weightStacks = weightStacks,
+                        onCreateWeightStack = homeViewModel::createWeightStack,
+                        onUpdateExercise = homeViewModel::updateExercise,
+                        modifier = Modifier.padding(innerPadding),
+                    )
+                }
                 1 -> {
                     val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
                     WorkoutsScreen(

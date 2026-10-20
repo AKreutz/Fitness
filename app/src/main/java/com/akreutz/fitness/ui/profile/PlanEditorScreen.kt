@@ -662,7 +662,7 @@ private fun WorkoutNameDialog(
     )
 }
 
-private fun Exercise.toDraft(): DraftExercise = DraftExercise(
+internal fun Exercise.toDraft(): DraftExercise = DraftExercise(
     name = name,
     type = type,
     sets = sets,

@@ -2,8 +2,10 @@ package com.akreutz.fitness.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -66,6 +68,44 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
         viewModelScope.launch {
             val workout = repository.nextWorkout(state.trainingPlan) ?: return@launch
             _startWorkoutEvents.emit(workout.id)
+        }
+    }
+
+    /** Every saved [WeightStack], for the weight-stack picker in the exercise editor. */
+    val weightStacks: StateFlow<List<WeightStack>> = repository.observeWeightStacks()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
+            initialValue = emptyList(),
+        )
+
+    suspend fun createWeightStack(name: String, levelsKg: List<Double>): WeightStack =
+        repository.createWeightStack(name, levelsKg)
+
+    /** Rewrites [exercise] with the edited fields. */
+    fun updateExercise(
+        exercise: Exercise,
+        name: String,
+        type: ExerciseType,
+        sets: Int,
+        reps: List<Int>,
+        weightKg: Double,
+        weightIncrementKg: Double,
+        weightStackId: String?,
+        restSeconds: Int,
+    ) {
+        viewModelScope.launch {
+            repository.updateExercise(
+                exercise,
+                name,
+                type,
+                sets,
+                reps,
+                weightKg,
+                weightIncrementKg,
+                weightStackId,
+                restSeconds,
+            )
         }
     }
 
