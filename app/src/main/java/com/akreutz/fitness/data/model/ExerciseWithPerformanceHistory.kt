@@ -49,6 +49,26 @@ val ExerciseWithPerformanceHistory.lastPerformanceAtCurrentWeight: ExercisePerfo
         ?.takeIf { it.weightKg == exercise.weightKg }
 
 /**
+ * The efforts rated in this exercise's most recent run of performances at its current
+ * [Exercise.weightKg], oldest first. Empty once the weight changes, since the earlier ratings
+ * described a different weight, which restarts the rep target at the scheme's first step.
+ */
+val ExerciseWithPerformanceHistory.effortsAtCurrentWeight: List<PerceivedEffort>
+    get() = performanceHistory.entries
+        .sortedByDescending { it.key }
+        .takeWhile { it.value.weightKg == exercise.weightKg }
+        .map { it.value.perceivedEffort }
+        .reversed()
+
+/** The rep target for the next session of this exercise (see [RepScheme.targetReps]). */
+val ExerciseWithPerformanceHistory.targetReps: Int
+    get() = RepScheme.targetReps(exercise.reps, effortsAtCurrentWeight)
+
+/** Whether the next session's rep target is already the scheme's highest step. */
+val ExerciseWithPerformanceHistory.isAtTopRepStep: Boolean
+    get() = RepScheme.targetStep(exercise.reps.size, effortsAtCurrentWeight) == exercise.reps.lastIndex
+
+/**
  * This exercise's [ExercisePerformanceEntry] recorded for the [WorkoutSession] that completed at
  * [completedAt], or `null` if it wasn't performed (or rated) in that session. Used to show a past
  * session's per-exercise stats, since sessions don't keep their own snapshot of them.

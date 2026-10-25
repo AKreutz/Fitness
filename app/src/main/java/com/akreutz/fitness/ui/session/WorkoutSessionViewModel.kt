@@ -9,7 +9,7 @@ import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutWithExercises
-import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
+import com.akreutz.fitness.data.model.isAtTopRepStep
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,8 +48,8 @@ sealed interface WorkoutSessionUiState {
      * [recoverySeconds]). When [exerciseToRate] is non-null, the just-finished exercise is
      * awaiting a perceived-effort rating (via [WorkoutSessionViewModel.rateExercise]) before the
      * session can move on to [exercise]. When [exerciseToOfferWeightIncrease] is non-null (only
-     * possible once [exerciseToRate] is `null` again), the user just rated it "easy" effort for
-     * the second time in a row and is being asked whether to raise its weight for next time (via
+     * possible once [exerciseToRate] is `null` again), the user just rated it "easy" effort at
+     * the highest rep target and is being asked whether to raise its weight for next time (via
      * [WorkoutSessionViewModel.respondToWeightIncreaseOffer]).
      */
     data class InProgress(
@@ -121,8 +121,8 @@ private const val RECOVERY_TICK_MILLIS = 1_000L
  * [advance]. Finishing the warm-up moves straight to the first working set with no rest;
  * finishing any working set but the exercise's last starts a rest timer (counting up past zero
  * once it elapses) that [advance] both stops and steps past. Finishing an exercise's last set
- * prompts for a perceived-effort rating (via [rateExercise]); rating it "easy" for the second
- * session in a row then also prompts whether to raise its weight for next time (via
+ * prompts for a perceived-effort rating (via [rateExercise]); rating it "easy" at the highest rep
+ * target then also prompts whether to raise its weight for next time (via
  * [respondToWeightIncreaseOffer]). Once the workout's last exercise is rated (and any such offer
  * answered), persists all of the session's ratings under today's date and finishes the session.
  * When a rest period reaches its exercise's prescribed rest duration, [restTimerAlerter] is fired
@@ -343,7 +343,7 @@ class WorkoutSessionViewModel(
 
     /**
      * Records [effort] as the just-finished exercise's rating. If [effort] is
-     * [PerceivedEffort.EASY] and so was that exercise's most recent prior performance, pauses on
+     * [PerceivedEffort.EASY] and the exercise was at its highest rep target, pauses on
      * an offer to raise its weight for next time (via [respondToWeightIncreaseOffer]) before
      * moving on; otherwise moves on directly (see [proceedAfterRating]).
      */
@@ -355,8 +355,7 @@ class WorkoutSessionViewModel(
         )
         exerciseToRate.value = null
 
-        val lastPerceivedEffort = rated.lastPerformanceAtCurrentWeight?.perceivedEffort
-        if (effort == PerceivedEffort.EASY && lastPerceivedEffort == PerceivedEffort.EASY) {
+        if (effort == PerceivedEffort.EASY && rated.isAtTopRepStep) {
             exerciseToOfferWeightIncrease.value = rated
         } else {
             proceedAfterRating()

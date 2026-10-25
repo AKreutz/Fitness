@@ -126,6 +126,7 @@ import com.akreutz.fitness.data.model.RepScheme
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.nearestLevelKg
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
+import com.akreutz.fitness.data.model.targetReps
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import com.akreutz.fitness.ui.theme.OnPlateChrome1_25
 import com.akreutz.fitness.ui.theme.OnPlateWhite5
@@ -793,8 +794,7 @@ private fun SetPillsRow(
     modifier: Modifier = Modifier,
 ) {
     val currentSetNumber = setProgress.setNumber ?: return
-    val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
-    val targetReps = RepScheme.targetReps(exercise.exercise.reps, lastPerceivedEffort)
+    val targetReps = exercise.targetReps
     val label = "${formatWeightCompact(exercise.exercise.weightKg)}kg×$targetReps"
 
     Row(
@@ -1046,7 +1046,7 @@ private fun WeightIncreaseOfferDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(
-                    "${exercise.exercise.name} has felt easy twice in a row.",
+                    "${exercise.exercise.name} has felt easy at your top rep target.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Row(
@@ -1192,8 +1192,7 @@ private fun CurrentExerciseCard(
                     levelsKg = stack?.levelsKg,
                 )
             }
-            val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
-            val targetReps = RepScheme.targetReps(exercise.exercise.reps, lastPerceivedEffort)
+            val targetReps = exercise.targetReps
             // For free weights this is what's actually on the bar, which can differ from the
             // target when the bar isn't a multiple of the plate step; the set cards show the target.
             val shownWeightKg = if (exercise.exercise.type == ExerciseType.FREE_WEIGHTS) {

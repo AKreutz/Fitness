@@ -332,7 +332,7 @@ class TrainingPlanRepository(
     /**
      * Sets the exercise with [exerciseId]'s prescribed [Exercise.weightKg] to [weightKg], for next
      * time it's performed. Used when the user opts to raise the weight after rating an exercise
-     * "easy" effort twice in a row: callers compute [weightKg] as
+     * "easy" effort at the highest rep target: callers compute [weightKg] as
      * `exercise.weightKg + exercise.weightIncrementKg` for most exercises, but let the user
      * choose it directly for [ExerciseType.CABLE] ones, since cable machines' weight levels aren't
      * evenly spaced. Its performance history is left as-is (for later visualization); readers

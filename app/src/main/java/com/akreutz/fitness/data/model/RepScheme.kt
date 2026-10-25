@@ -13,17 +13,24 @@ object RepScheme {
     fun format(reps: List<Int>): String = reps.joinToString("-")
 
     /**
-     * The single rep target to use for every set of a session, chosen from [reps] by how hard
-     * the exercise's most recent performance felt: [PerceivedEffort.HARD] or no prior
-     * performance picks the first (easiest) target, [PerceivedEffort.MEDIUM] the second, and
-     * [PerceivedEffort.EASY] the third.
+     * The index into a scheme of [stepCount] targets that the next session should use, given the
+     * [efforts] rated in earlier sessions at the current weight (oldest first). Starts at the first
+     * (lowest) step; each [PerceivedEffort.HARD] rating moves one step down, [PerceivedEffort.MEDIUM]
+     * keeps the step, and [PerceivedEffort.EASY] moves one step up, never leaving the scheme.
      */
-    fun targetReps(reps: List<Int>, lastPerceivedEffort: PerceivedEffort?): Int {
-        val index = when (lastPerceivedEffort) {
-            PerceivedEffort.EASY -> 2
-            PerceivedEffort.MEDIUM -> 1
-            PerceivedEffort.HARD, null -> 0
+    fun targetStep(stepCount: Int, efforts: List<PerceivedEffort>): Int =
+        efforts.fold(0) { step, effort ->
+            when (effort) {
+                PerceivedEffort.HARD -> step - 1
+                PerceivedEffort.MEDIUM -> step
+                PerceivedEffort.EASY -> step + 1
+            }.coerceIn(0, stepCount - 1)
         }
-        return reps[index.coerceIn(reps.indices)]
-    }
+
+    /**
+     * The single rep target to use for every set of a session, chosen from [reps] by the step
+     * reached after the [efforts] rated at the current weight (see [targetStep]).
+     */
+    fun targetReps(reps: List<Int>, efforts: List<PerceivedEffort>): Int =
+        reps[targetStep(reps.size, efforts)]
 }
