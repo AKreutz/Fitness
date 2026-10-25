@@ -8,7 +8,7 @@ import java.time.Instant
 data class ExercisePerformanceEntry(
     val weightKg: Double,
     val perceivedEffort: PerceivedEffort,
-    val heartRate: HeartRateStats? = null,
+    val heartRateWindow: HeartRateWindow? = null,
 )
 
 /**
@@ -34,7 +34,7 @@ data class ExerciseWithPerformanceHistory(
     val records: List<ExercisePerformanceRecord>,
 ) {
     val performanceHistory: ExercisePerformanceHistory
-        get() = records.associate { it.completedAt to ExercisePerformanceEntry(it.weightKg, it.perceivedEffort, it.heartRate) }
+        get() = records.associate { it.completedAt to ExercisePerformanceEntry(it.weightKg, it.perceivedEffort, it.heartRateWindow) }
 }
 
 /**

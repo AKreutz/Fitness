@@ -10,6 +10,7 @@ import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.Workout
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.sync.FitnessSnapshot
+import kotlin.io.encoding.Base64
 import kotlinx.serialization.Serializable
 import java.time.Instant
 
@@ -160,6 +161,8 @@ data class WorkoutSessionDto(
     val durationSeconds: Long,
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
+    /** One byte per second since the session began, as Base64. */
+    val heartRateSamples: String? = null,
     val updatedAt: Long,
 ) {
     fun toEntity(): WorkoutSession = WorkoutSession(
@@ -170,6 +173,7 @@ data class WorkoutSessionDto(
         durationSeconds = durationSeconds,
         avgHeartRateBpm = avgHeartRateBpm,
         maxHeartRateBpm = maxHeartRateBpm,
+        heartRateSamples = heartRateSamples?.let { Base64.decode(it) },
         updatedAt = Instant.ofEpochMilli(updatedAt),
     )
 
@@ -182,6 +186,7 @@ data class WorkoutSessionDto(
             durationSeconds = entity.durationSeconds,
             avgHeartRateBpm = entity.avgHeartRateBpm,
             maxHeartRateBpm = entity.maxHeartRateBpm,
+            heartRateSamples = entity.heartRateSamples?.let { Base64.encode(it) },
             updatedAt = entity.updatedAt.toEpochMilli(),
         )
     }
@@ -196,6 +201,8 @@ data class ExercisePerformanceRecordDto(
     val perceivedEffort: String,
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
+    val heartRateStartSeconds: Int? = null,
+    val heartRateEndSeconds: Int? = null,
     val updatedAt: Long,
 ) {
     fun toEntity(): ExercisePerformanceRecord = ExercisePerformanceRecord(
@@ -206,6 +213,8 @@ data class ExercisePerformanceRecordDto(
         perceivedEffort = PerceivedEffort.valueOf(perceivedEffort),
         avgHeartRateBpm = avgHeartRateBpm,
         maxHeartRateBpm = maxHeartRateBpm,
+        heartRateStartSeconds = heartRateStartSeconds,
+        heartRateEndSeconds = heartRateEndSeconds,
         updatedAt = Instant.ofEpochMilli(updatedAt),
     )
 
@@ -218,6 +227,8 @@ data class ExercisePerformanceRecordDto(
             perceivedEffort = entity.perceivedEffort.name,
             avgHeartRateBpm = entity.avgHeartRateBpm,
             maxHeartRateBpm = entity.maxHeartRateBpm,
+            heartRateStartSeconds = entity.heartRateStartSeconds,
+            heartRateEndSeconds = entity.heartRateEndSeconds,
             updatedAt = entity.updatedAt.toEpochMilli(),
         )
     }

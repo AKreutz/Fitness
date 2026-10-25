@@ -5,12 +5,15 @@ import android.util.Log
 import com.garmin.android.connectiq.ConnectIQ
 import com.garmin.android.connectiq.IQApp
 import com.garmin.android.connectiq.IQDevice
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Transport to the Fitness watch app (see `garmin/`) through the Connect IQ Mobile SDK. It only
@@ -84,17 +87,38 @@ class GarminWatchConnection(
     }
 
     /** Sends [message] to every connected watch. Returns false when none is connected. */
-    fun send(message: Map<String, Any>): Boolean {
-        val sdk = connectIQ ?: return false
-        val devices = connectedDevices.toList()
-        devices.forEach { device ->
+    fun send(message: Map<String, Any>): Boolean = deliver(message).isNotEmpty()
+
+    /**
+     * Like [send], but waits until each watch has taken the message, failed to, or [timeoutMillis] have passed. Returns
+     * whether every watch took it.
+     */
+    suspend fun sendAndAwait(message: Map<String, Any>, timeoutMillis: Long = SEND_AWAIT_MILLIS): Boolean {
+        val deliveries = deliver(message)
+        return withTimeoutOrNull(timeoutMillis) { deliveries.awaitAll().all { it } } ?: false
+    }
+
+    /** Starts sending [message] to every connected watch; each result completes with whether that watch took it. */
+    private fun deliver(message: Map<String, Any>): List<CompletableDeferred<Boolean>> {
+        val sdk = connectIQ ?: return emptyList()
+        return connectedDevices.toList().map { device ->
+            val done = CompletableDeferred<Boolean>()
             runCatching {
+                Log.i(TAG, "Sending to watch: $message")
                 sdk.sendMessage(device, watchApp, message) { _, _, status ->
-                    if (status != ConnectIQ.IQMessageStatus.SUCCESS) Log.w(TAG, "Sending to watch failed: $status")
+                    if (status != ConnectIQ.IQMessageStatus.SUCCESS) {
+                        Log.w(TAG, "Sending to watch failed: $status")
+                    } else {
+                        Log.i(TAG, "Sent to watch")
+                    }
+                    done.complete(status == ConnectIQ.IQMessageStatus.SUCCESS)
                 }
-            }.onFailure { Log.w(TAG, "Sending to watch failed", it) }
+            }.onFailure {
+                Log.w(TAG, "Sending to watch failed", it)
+                done.complete(false)
+            }
+            done
         }
-        return devices.isNotEmpty()
     }
 
     private fun registerDevices(sdk: ConnectIQ) {
@@ -106,6 +130,7 @@ class GarminWatchConnection(
             runCatching {
                 sdk.registerForDeviceEvents(device) { d, status -> onDeviceStatus(d, status) }
                 sdk.registerForAppEvents(device, watchApp) { _, _, messages, status ->
+                    Log.i(TAG, "From watch: status $status, ${messages?.size} item(s)")
                     if (status == ConnectIQ.IQMessageStatus.SUCCESS) onMessages(messages)
                 }
                 onDeviceStatus(device, sdk.getDeviceStatus(device))
@@ -114,6 +139,7 @@ class GarminWatchConnection(
     }
 
     private fun onDeviceStatus(device: IQDevice, status: IQDevice.IQDeviceStatus) {
+        Log.i(TAG, "Device ${device.friendlyName}: $status")
         if (status == IQDevice.IQDeviceStatus.CONNECTED) {
             connectedDevices.add(device)
         } else {
@@ -126,6 +152,8 @@ class GarminWatchConnection(
         messages.orEmpty().forEach { message ->
             if (message is Map<*, *>) {
                 _messages.tryEmit(message.entries.associate { (key, value) -> key.toString() to value })
+            } else {
+                Log.w(TAG, "From watch: ignoring ${message?.javaClass?.name}: $message")
             }
         }
     }
@@ -133,5 +161,6 @@ class GarminWatchConnection(
     private companion object {
         const val TAG = "GarminWatch"
         const val MESSAGE_BUFFER = 16
+        const val SEND_AWAIT_MILLIS = 4_000L
     }
 }

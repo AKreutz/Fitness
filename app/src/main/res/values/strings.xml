@@ -2,5 +2,4 @@
     <string name="app_name">Fitness</string>
     <string name="watch_sync_channel_name">Watch connection</string>
     <string name="watch_sync_notification_title">Workout in progress</string>
-    <string name="watch_sync_notification_text">Connected to your watch</string>
-</resources>
+    <string name="watch_sync_notification_text">Connected to your watch</string></resources>

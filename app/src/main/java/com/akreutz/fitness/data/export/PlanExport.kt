@@ -5,6 +5,7 @@ import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.WorkoutSession
+import kotlin.io.encoding.Base64
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -43,6 +44,8 @@ data class PlanExportSessionDto(
     val durationSeconds: Long,
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
+    /** The watch's readings, one byte per second since the session began, as Base64. */
+    val heartRateSamples: String? = null,
 )
 
 @Serializable
@@ -52,6 +55,8 @@ data class PlanExportPerformanceDto(
     val perceivedEffort: String,
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
+    val heartRateStartSeconds: Int? = null,
+    val heartRateEndSeconds: Int? = null,
 )
 
 @Serializable
@@ -108,6 +113,7 @@ object PlanExportCodec {
                                     durationSeconds = it.durationSeconds,
                                     avgHeartRateBpm = it.avgHeartRateBpm,
                                     maxHeartRateBpm = it.maxHeartRateBpm,
+                                    heartRateSamples = it.heartRateSamples?.let { samples -> Base64.encode(samples) },
                                 )
                             },
                         exercises = workoutWithExercises.exercises
@@ -135,6 +141,8 @@ object PlanExportCodec {
                                                 perceivedEffort = it.perceivedEffort.name,
                                                 avgHeartRateBpm = it.avgHeartRateBpm,
                                                 maxHeartRateBpm = it.maxHeartRateBpm,
+                                                heartRateStartSeconds = it.heartRateStartSeconds,
+                                                heartRateEndSeconds = it.heartRateEndSeconds,
                                             )
                                         },
                                 )

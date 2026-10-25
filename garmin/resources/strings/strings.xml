@@ -1,4 +1,31 @@
 <strings>
     <string id="AppName">Fitness</string>
     <string id="Waiting">Waiting for phone…</string>
+    <string id="NoPhone">Phone not reachable</string>
+    <string id="NoPhoneBanner">No phone</string>
+    <string id="Unavailable">No workout to follow</string>
+    <string id="WarmUp">Warm-up</string>
+    <string id="Set">Set</string>
+    <string id="Rest">Rest</string>
+    <string id="StartFirstSet">START: first set</string>
+    <string id="FinishSet">START: set done</string>
+    <string id="NextSet">START: next set</string>
+    <string id="HowDidItFeel">How did it feel?</string>
+    <string id="Easy">Easy</string>
+    <string id="Medium">Medium</string>
+    <string id="Hard">Hard</string>
+    <string id="Confirm">START: confirm</string>
+    <string id="RaiseWeight">Raise the weight?</string>
+    <string id="Yes">Yes</string>
+    <string id="No">No</string>
+    <string id="WorkoutDone">Workout done</string>
+    <string id="PersonalRecords">Personal records</string>
+    <string id="HeartRate">bpm</string>
+    <string id="AverageHeartRate">avg bpm</string>
+    <string id="LeaveHint">BACK: leave</string>
+    <string id="Finishing">Finishing…</string>
+    <string id="SavingWorkout">Saving workout…</string>
+    <string id="HeartRateSending">Sending heart rate…</string>
+    <string id="HeartRateSaved">Heart rate saved</string>
+    <string id="HeartRateNotSent">Heart rate not saved</string>
 </strings>

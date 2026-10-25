@@ -37,9 +37,20 @@ data class ExercisePerformanceRecord(
     val perceivedEffort: PerceivedEffort,
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
+    /** The seconds since the session began at which this exercise started and was rated, to find its heart rate in the session's samples. */
+    val heartRateStartSeconds: Int? = null,
+    val heartRateEndSeconds: Int? = null,
     val updatedAt: Instant = Instant.now(),
 )
 
 /** The heart rate the watch measured during this performance, if it did. */
 val ExercisePerformanceRecord.heartRate: HeartRateStats?
     get() = heartRateStats(avgHeartRateBpm, maxHeartRateBpm)
+
+/** When in the session this exercise was done, if it was recorded. */
+val ExercisePerformanceRecord.heartRateWindow: HeartRateWindow?
+    get() = if (heartRateStartSeconds != null && heartRateEndSeconds != null) {
+        HeartRateWindow(heartRateStartSeconds, heartRateEndSeconds)
+    } else {
+        null
+    }

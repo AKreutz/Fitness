@@ -1,6 +1,5 @@
 package com.akreutz.fitness.data.watch
 
-import com.akreutz.fitness.data.model.HeartRateStats
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.targetReps
 import com.akreutz.fitness.ui.session.SetProgress
@@ -21,21 +20,29 @@ sealed interface WatchCommand {
     data class RespondToWeightIncrease(val accept: Boolean) : WatchCommand
 
     /**
-     * Heart rate measured so far for the exercise with [exerciseId], and for the whole session.
-     * Sent repeatedly, each one replacing the one before.
+     * One piece of the heart rate readings the watch sends after a finished session [sessionId]: piece number [index]
+     * of [count], to be put together with the others. [packed] holds three readings in each number (see
+     * [WatchProtocol]); [sampleCount] is how many readings there are in all. The readings are one per second from
+     * [recordingStartEpochSeconds]. A [count] of 0 says the watch has none.
      */
-    data class HeartRate(
-        val exerciseId: String,
-        val exercise: HeartRateStats,
-        val session: HeartRateStats,
+    data class HeartRateChunk(
+        val sessionId: String,
+        val recordingStartEpochSeconds: Long,
+        val index: Int,
+        val count: Int,
+        val sampleCount: Int,
+        val packed: List<Int>,
     ) : WatchCommand
 
     /** The watch has (re)started and wants the current state. */
     data object Sync : WatchCommand
 }
 
-/** A [command] together with the id the watch gave it, which stays the same if it is sent twice. */
-data class WatchMessage(val id: Long?, val command: WatchCommand)
+/**
+ * A [command] together with the id the watch gave it, which stays the same if it is sent twice, and the [version] of the
+ * state it was pressed on.
+ */
+data class WatchMessage(val id: Long?, val version: Int?, val command: WatchCommand)
 
 /**
  * The messages between this app and the watch app in `garmin/`, as the dictionaries Connect IQ
@@ -50,15 +57,24 @@ data class WatchMessage(val id: Long?, val command: WatchCommand)
  * - `rg`: rest goal in seconds; `rt`: when the rest began, in epoch seconds (resting only)
  * - `nw`: the weight on offer (weight increase offer only)
  * - `sk`: 1 if the exercise can be skipped
- * - `pr`: personal records (finished only)
+ * - `v`: the state's version, which goes up with every change (added by [WatchSessionBridge])
+ * - finished only, `p` is [PHASE_FINISHED]: `pr` personal records, `sid` the id the session is saved under, `ok` 0 while
+ *   the phone waits for the watch's heart rate readings before saving, and 1 once it has saved the session, and then `hr`
+ *   1 if the readings were saved with it
  *
- * Watch to phone, every message has `t` and the ones that change something also have an id `m`
- * that stays the same if the watch sends it again:
+ * When the session is left or discarded the phone sends `{t: "idle"}` instead, and the watch goes back to waiting. A
+ * finished session is not signed off, so its summary stays on the watch.
+ *
+ * Watch to phone, every message has `t`. The ones that change something also have an id `m`, which stays the same if
+ * the watch sends it again, and the `v` of the state they were pressed on, so a press on a screen the phone has already
+ * left is ignored instead of acting twice:
  * - `adv`, `skip`, `sync`
  * - `rate`: `e` is 0 (easy), 1 (medium) or 2 (hard)
  * - `inc`: `y` is 1 to take the offered weight, 0 to keep the current one
- * - `hr`: `id` is the exercise id, `a`/`x` the exercise's average / max heart rate, `sa`/`sx` the
- *   session's
+ * - `hl`: the heart rate readings, sent once when a finished state with `ok` 0 says the phone is waiting for them: `sid`
+ *   is the session's id, `t0` when the first reading was taken (epoch seconds), `k` how many pieces there are (0 if the
+ *   watch has no readings), `i` this piece's number from 0, `n` the number of readings in all, and `d` this piece's
+ *   readings: one reading per second, three to a number (the first in the lowest 8 bits), 0 for a second without one
  */
 object WatchProtocol {
     const val PHASE_WARM_UP = 0
@@ -68,6 +84,11 @@ object WatchProtocol {
     const val PHASE_WEIGHT_OFFER = 4
     const val PHASE_FINISHED = 5
     const val PHASE_UNAVAILABLE = 6
+
+    // What a heart rate transfer may claim to hold, so a broken message cannot make the phone allocate without end: a
+    // day of readings.
+    private const val MAX_SAMPLES = 24 * 3_600
+    private const val MAX_CHUNKS = MAX_SAMPLES
 
     /**
      * Encodes [state], or returns `null` while it is still loading. [restStartedAtEpochSeconds] is
@@ -81,10 +102,20 @@ object WatchProtocol {
     ): Map<String, Any>? = when (state) {
         WorkoutSessionUiState.Loading -> null
         WorkoutSessionUiState.Unavailable -> mapOf("t" to "state", "p" to PHASE_UNAVAILABLE)
+        is WorkoutSessionUiState.WaitingForHeartRate -> mapOf(
+            "t" to "state",
+            "p" to PHASE_FINISHED,
+            "pr" to state.personalRecords,
+            "sid" to state.sessionId,
+            "ok" to 0,
+        )
         is WorkoutSessionUiState.Finished -> mapOf(
             "t" to "state",
             "p" to PHASE_FINISHED,
             "pr" to state.personalRecords,
+            "sid" to state.sessionId,
+            "ok" to 1,
+            "hr" to if (state.heartRateSaved) 1 else 0,
         )
         is WorkoutSessionUiState.InProgress -> encodeInProgress(state, restStartedAtEpochSeconds, increasedWeightKg)
     }
@@ -136,9 +167,13 @@ object WatchProtocol {
         return message
     }
 
+    /** Tells the watch the session is over, so it goes back to waiting for the next one. */
+    fun encodeSignOff(): Map<String, Any> = mapOf("t" to "idle")
+
     /** Decodes a message from the watch, or `null` if it is not one this app understands. */
     fun decode(message: Map<String, Any?>): WatchMessage? {
         val id = message["m"].asLong()
+        val version = message["v"].asLong()?.toInt()
         val command = when (message["t"]) {
             "adv" -> WatchCommand.Advance
             "skip" -> WatchCommand.Skip
@@ -150,25 +185,28 @@ object WatchProtocol {
                 else -> null
             }?.let(WatchCommand::Rate)
             "inc" -> message["y"].asLong()?.let { WatchCommand.RespondToWeightIncrease(accept = it == 1L) }
-            "hr" -> decodeHeartRate(message)
+            "hl" -> decodeHeartRate(message)
             else -> null
         } ?: return null
-        return WatchMessage(id, command)
+        return WatchMessage(id, version, command)
     }
 
-    private fun decodeHeartRate(message: Map<String, Any?>): WatchCommand.HeartRate? {
-        val exerciseId = message["id"] as? String ?: return null
-        val exercise = heartRate(message["a"], message["x"]) ?: return null
-        val session = heartRate(message["sa"], message["sx"]) ?: return null
-        return WatchCommand.HeartRate(exerciseId, exercise, session)
-    }
-
-    private fun heartRate(avg: Any?, max: Any?): HeartRateStats? {
-        val avgBpm = avg.asLong()?.toInt() ?: return null
-        val maxBpm = max.asLong()?.toInt() ?: return null
-        return HeartRateStats(avgBpm, maxBpm).takeIf { avgBpm > 0 && maxBpm >= avgBpm }
+    private fun decodeHeartRate(message: Map<String, Any?>): WatchCommand.HeartRateChunk? {
+        val sessionId = message["sid"] as? String ?: return null
+        val count = message["k"].asLong()?.toInt()?.takeIf { it in 0..MAX_CHUNKS } ?: return null
+        if (count == 0) return WatchCommand.HeartRateChunk(sessionId, 0, 0, 0, 0, emptyList())
+        val index = message["i"].asLong()?.toInt()?.takeIf { it in 0 until count } ?: return null
+        val sampleCount = message["n"].asLong()?.toInt()?.takeIf { it in 1..MAX_SAMPLES } ?: return null
+        val start = message["t0"].asLong() ?: return null
+        val packed = (message["d"] as? List<*>)?.map { (it as? Number)?.toInt() ?: return null } ?: return null
+        return WatchCommand.HeartRateChunk(sessionId, start, index, count, sampleCount, packed)
     }
 
     // Numbers arrive as whichever integer type the SDK picked.
     private fun Any?.asLong(): Long? = (this as? Number)?.toLong()
 }
+
+/** Whether the command changes where the session is, so it only makes sense on the state it was pressed on. */
+val WatchCommand.changesSession: Boolean
+    get() = this is WatchCommand.Advance || this is WatchCommand.Skip || this is WatchCommand.Rate ||
+        this is WatchCommand.RespondToWeightIncrease

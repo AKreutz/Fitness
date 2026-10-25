@@ -10,7 +10,8 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
 import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.ExerciseType
-import com.akreutz.fitness.data.model.HeartRateStats
+import com.akreutz.fitness.data.model.HeartRateRecording
+import com.akreutz.fitness.data.model.HeartRateSamples
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
@@ -23,6 +24,7 @@ import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.prefs.ActivePlanPreferences
 import com.akreutz.fitness.data.sync.LocalChangeTracker
+import kotlin.io.encoding.Base64
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -204,6 +206,7 @@ class TrainingPlanRepository(
                             durationSeconds = session.durationSeconds,
                             avgHeartRateBpm = session.avgHeartRateBpm,
                             maxHeartRateBpm = session.maxHeartRateBpm,
+                            heartRateSamples = session.heartRateSamples?.let { Base64.decode(it) },
                         ),
                     )
                 }
@@ -235,6 +238,8 @@ class TrainingPlanRepository(
                                 perceivedEffort = PerceivedEffort.valueOf(record.perceivedEffort),
                                 avgHeartRateBpm = record.avgHeartRateBpm,
                                 maxHeartRateBpm = record.maxHeartRateBpm,
+                                heartRateStartSeconds = record.heartRateStartSeconds,
+                                heartRateEndSeconds = record.heartRateEndSeconds,
                             ),
                         )
                     }
@@ -303,39 +308,50 @@ class TrainingPlanRepository(
      * aren't affected by a same-session weight increase (see [setExerciseWeight]) applied to an
      * earlier-rated exercise afterwards. Keying by the exact completion instant (rather than just
      * the date) means a second workout completed the same day gets its own entry instead of
-     * overwriting the first's. [heartRate] is the whole session's, when the watch measured it; each
-     * entry carries its own exercise's.
+     * overwriting the first's. The session is saved under [sessionId]. [heartRate] is the watch's readings for it, when
+     * it measured any: they are put on the session's own clock and kept with it, and the average and highest heart rate
+     * of the session, and of each exercise (found through its [ExercisePerformanceEntry.heartRateWindow]), are worked
+     * out from them.
      */
     suspend fun recordPerceivedEfforts(
         workoutId: String,
         entries: Map<String, ExercisePerformanceEntry>,
         startedAt: Instant,
-        heartRate: HeartRateStats? = null,
+        sessionId: String,
+        completedAt: Instant = Instant.now(),
+        heartRate: HeartRateRecording? = null,
     ) {
-        val completedAt = Instant.now()
+        val samples = heartRate
+            ?.let { HeartRateSamples.alignToSession(it.samples, it.startEpochSeconds, startedAt.epochSecond) }
+            ?.takeIf { it.isNotEmpty() }
+        val sessionStats = samples?.let { HeartRateSamples.stats(it) }
+        val session = WorkoutSession(
+            id = sessionId,
+            workoutId = workoutId,
+            startedAt = startedAt,
+            completedAt = completedAt,
+            durationSeconds = Duration.between(startedAt, completedAt).seconds,
+            avgHeartRateBpm = sessionStats?.avgBpm,
+            maxHeartRateBpm = sessionStats?.maxBpm,
+            heartRateSamples = samples,
+        )
         database.withTransaction {
             entries.forEach { (exerciseId, entry) ->
+                val stats = samples?.let { readings -> entry.heartRateWindow?.let { HeartRateSamples.stats(readings, it) } }
                 database.exercisePerformanceRecordDao().insert(
                     ExercisePerformanceRecord(
                         exerciseId = exerciseId,
                         completedAt = completedAt,
                         weightKg = entry.weightKg,
                         perceivedEffort = entry.perceivedEffort,
-                        avgHeartRateBpm = entry.heartRate?.avgBpm,
-                        maxHeartRateBpm = entry.heartRate?.maxBpm,
+                        avgHeartRateBpm = stats?.avgBpm,
+                        maxHeartRateBpm = stats?.maxBpm,
+                        heartRateStartSeconds = entry.heartRateWindow?.startSeconds,
+                        heartRateEndSeconds = entry.heartRateWindow?.endSeconds,
                     ),
                 )
             }
-            database.workoutSessionDao().insert(
-                WorkoutSession(
-                    workoutId = workoutId,
-                    startedAt = startedAt,
-                    completedAt = completedAt,
-                    durationSeconds = Duration.between(startedAt, completedAt).seconds,
-                    avgHeartRateBpm = heartRate?.avgBpm,
-                    maxHeartRateBpm = heartRate?.maxBpm,
-                ),
-            )
+            database.workoutSessionDao().insert(session)
         }
         localChangeTracker.markDirty()
     }

@@ -5,32 +5,41 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
-import com.akreutz.fitness.data.model.HeartRateStats
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
+import com.akreutz.fitness.data.model.HeartRateRecording
+import com.akreutz.fitness.data.model.HeartRateWindow
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.isAtTopRepStep
 import com.akreutz.fitness.data.model.suggestedIncreasedWeightKg
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.data.watch.HeartRateProgress
 import com.akreutz.fitness.data.watch.WatchCommand
 import com.akreutz.fitness.data.watch.WatchProtocol
 import com.akreutz.fitness.data.watch.WatchSessionBridge
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 
 /** A single step within an exercise: the warm-up, then one step per prescribed working set. */
 private sealed interface ExerciseStep {
@@ -80,11 +89,27 @@ sealed interface WorkoutSessionUiState {
     data object Unavailable : WorkoutSessionUiState
 
     /**
-     * The user has gone through every exercise and the session is done. [personalRecords] is how
-     * many of its exercises were done at a heavier weight than ever before. [heartRate] is the
-     * session's heart rate as measured by the watch, if there was one.
+     * Every exercise is done, but the session is not saved yet: the watch is sending its heart rate readings, which are
+     * saved with it. [receivedPieces] of [totalPieces] have arrived (both 0 until the first does). It can be saved
+     * without them via [WorkoutSessionViewModel.skipHeartRate]. [personalRecords] and [sessionId] are as in [Finished].
      */
-    data class Finished(val personalRecords: Int, val heartRate: HeartRateStats? = null) : WorkoutSessionUiState
+    data class WaitingForHeartRate(
+        val personalRecords: Int,
+        val sessionId: String,
+        val receivedPieces: Int,
+        val totalPieces: Int,
+    ) : WorkoutSessionUiState
+
+    /**
+     * The user has gone through every exercise and the session is saved. [personalRecords] is how
+     * many of its exercises were done at a heavier weight than ever before. [sessionId] is the id
+     * it was saved under, and [heartRateSaved] whether the watch's heart rate readings were saved with it.
+     */
+    data class Finished(
+        val personalRecords: Int,
+        val sessionId: String,
+        val heartRateSaved: Boolean,
+    ) : WorkoutSessionUiState
 }
 
 /** Describes the set currently shown on an [WorkoutSessionUiState.InProgress] card. */
@@ -123,6 +148,10 @@ sealed interface SetProgress {
 }
 
 private const val RECOVERY_TICK_MILLIS = 1_000L
+private const val STATE_SETTLE_MILLIS = 120L
+
+/** How long a finished session waits for the watch's heart rate readings once they have stopped coming. */
+private const val HEART_RATE_IDLE_MILLIS = 20_000L
 
 /**
  * Drives a single guided workout session: walks the user through [workoutId]'s exercises in
@@ -138,8 +167,10 @@ private const val RECOVERY_TICK_MILLIS = 1_000L
  * once (not on every later tick) to notify the user that rest is over.
  *
  * The session can also be run from the watch: its state is published to [watchBridge] (see
- * [WatchProtocol]) and the commands the watch sends back do the same as the buttons on screen. The
- * heart rate the watch measures is stored with the exercise ratings.
+ * [WatchProtocol]) and the commands the watch sends back do the same as the buttons on screen. When the watch is there
+ * to measure heart rate, saving the finished session waits for its readings (see
+ * [WorkoutSessionUiState.WaitingForHeartRate]) so they are saved with it; each rating records where in the session its
+ * exercise was done, so its own heart rate can be found in them.
  */
 class WorkoutSessionViewModel(
     private val repository: TrainingPlanRepository,
@@ -179,11 +210,18 @@ class WorkoutSessionViewModel(
     /** How many exercises were done at a new heaviest weight; set just before [readyToFinish]. */
     private var personalRecords = 0
 
-    /** The latest heart rate the watch reported for each exercise, by exercise id. */
-    private val exerciseHeartRates = mutableMapOf<String, HeartRateStats>()
+    /** The id the session is saved under, chosen once the last exercise is rated, so the watch can send readings for it. */
+    private var finishedSessionId: String? = null
 
-    /** The latest heart rate the watch reported for the whole session so far. */
-    private var sessionHeartRate: HeartRateStats? = null
+    /** Whether the watch's heart rate readings were saved with the session; set just before [readyToFinish]. */
+    private var heartRateSaved = false
+
+    /** Whether the finished session is waiting for the watch's heart rate readings before it is saved. */
+    private val waitingForHeartRate = MutableStateFlow(false)
+    private var heartRateWait: Job? = null
+
+    /** When the exercise now shown began, to tell where in the session each exercise was done. */
+    private var exerciseStartedAt: Instant = startedAt
 
     /** When the current rest began, in epoch seconds, for the watch's own rest timer. */
     private var restStartedAtEpochSeconds: Long? = null
@@ -227,6 +265,7 @@ class WorkoutSessionViewModel(
         val exerciseToRate: ExerciseWithPerformanceHistory?,
         val exerciseToOfferWeightIncrease: ExerciseWithPerformanceHistory?,
         val readyToFinish: Boolean,
+        val waitingForHeartRate: Boolean,
         val skippedIds: Set<String>,
     )
 
@@ -234,7 +273,8 @@ class WorkoutSessionViewModel(
     private val prompts: Flow<Pair<ExerciseWithPerformanceHistory?, ExerciseWithPerformanceHistory?>> =
         combine(exerciseToRate, exerciseToOfferWeightIncrease, ::Pair)
 
-    private val finishAndSkipped: Flow<Pair<Boolean, Set<String>>> = combine(readyToFinish, skippedIds, ::Pair)
+    private val finishAndSkipped: Flow<Triple<Boolean, Boolean, Set<String>>> =
+        combine(readyToFinish, waitingForHeartRate, skippedIds, ::Triple)
 
     private val progress: Flow<Progress> = combine(
         exerciseIndex,
@@ -242,16 +282,30 @@ class WorkoutSessionViewModel(
         recoverySeconds,
         prompts,
         finishAndSkipped,
-    ) { index: Int, (currentStep, isResting), seconds: Int?, (toRate, toOfferIncrease), (finished, skipped) ->
-        Progress(index, currentStep, isResting, seconds, toRate, toOfferIncrease, finished, skipped)
+    ) { index: Int, (currentStep, isResting), seconds: Int?, (toRate, toOfferIncrease), (finished, waiting, skipped) ->
+        Progress(index, currentStep, isResting, seconds, toRate, toOfferIncrease, finished, waiting, skipped)
     }
 
     val uiState: StateFlow<WorkoutSessionUiState> =
-        combine(workout, progress) { workout: WorkoutWithExercises?, progress: Progress ->
+        combine(workout, progress, watchBridge.heartRateProgress) {
+                workout: WorkoutWithExercises?,
+                progress: Progress,
+                heartRateProgress: HeartRateProgress?,
+            ->
             val exercises = workout?.exercises
             when {
                 exercises.isNullOrEmpty() -> WorkoutSessionUiState.Unavailable
-                progress.readyToFinish -> WorkoutSessionUiState.Finished(personalRecords, sessionHeartRate)
+                progress.readyToFinish -> WorkoutSessionUiState.Finished(
+                    personalRecords,
+                    finishedSessionId.orEmpty(),
+                    heartRateSaved,
+                )
+                progress.waitingForHeartRate -> WorkoutSessionUiState.WaitingForHeartRate(
+                    personalRecords,
+                    finishedSessionId.orEmpty(),
+                    heartRateProgress?.received ?: 0,
+                    heartRateProgress?.total ?: 0,
+                )
                 progress.exerciseIndex >= exercises.size -> WorkoutSessionUiState.Unavailable
                 else -> {
                     val exercise = exercises[progress.exerciseIndex]
@@ -295,6 +349,9 @@ class WorkoutSessionViewModel(
                 )
             }
             .distinctUntilChanged()
+            // A step often changes two things one after the other (the next exercise, then its warm-up), which is
+            // briefly a state that never really exists; the watch should only get the one that settles.
+            .debounce(STATE_SETTLE_MILLIS)
             .onEach(watchBridge::publishState)
             .launchIn(viewModelScope)
         watchBridge.commands.onEach(::handleWatchCommand).launchIn(viewModelScope)
@@ -319,11 +376,8 @@ class WorkoutSessionViewModel(
                     if (command.accept) offered.suggestedIncreasedWeightKg(latestWeightStacks) else null,
                 )
             }
-            is WatchCommand.HeartRate -> {
-                exerciseHeartRates[command.exerciseId] = command.exercise
-                sessionHeartRate = command.session
-            }
-            WatchCommand.Sync -> Unit
+            // The heart rate readings arrive after the session is over; the watch connection saves them.
+            is WatchCommand.HeartRateChunk, WatchCommand.Sync -> Unit
         }
     }
 
@@ -390,6 +444,7 @@ class WorkoutSessionViewModel(
         sessionOrder.value = newOrder
         exerciseIndex.value = newOrder.indexOf(exerciseId)
         skippedIds.value -= exerciseId
+        exerciseStartedAt = Instant.now()
     }
 
     /**
@@ -420,7 +475,10 @@ class WorkoutSessionViewModel(
         collectedRatings[rated.exercise.id] = ExercisePerformanceEntry(
             weightKg = rated.exercise.weightKg,
             perceivedEffort = effort,
-            heartRate = exerciseHeartRates[rated.exercise.id],
+            heartRateWindow = HeartRateWindow(
+                startSeconds = secondsIntoSession(exerciseStartedAt),
+                endSeconds = secondsIntoSession(Instant.now()),
+            ),
         )
         exerciseToRate.value = null
 
@@ -458,7 +516,9 @@ class WorkoutSessionViewModel(
      * this session together with a log of the session itself (see
      * [TrainingPlanRepository.recordPerceivedEfforts] — logging it is also what marks this workout
      * as the most recently *finished* one, so [TrainingPlanRepository.nextWorkout] advances the
-     * rotation only now, not when the workout was merely started), and finishes.
+     * rotation only now, not when the workout was merely started), and finishes. If a watch is there to measure heart
+     * rate, that waits until its readings have come in so they are saved with the session: for as long as they are
+     * on their way, and until they stop coming for [HEART_RATE_IDLE_MILLIS], or [skipHeartRate] is called.
      */
     private fun proceedAfterRating() {
         val isLastExercise = exerciseIndex.value >= (latestExercises?.lastIndex ?: -1)
@@ -470,14 +530,57 @@ class WorkoutSessionViewModel(
                     val previous = latestExercises?.firstOrNull { it.exercise.id == exerciseId }?.records
                     !previous.isNullOrEmpty() && entry.weightKg > previous.maxOf { it.weightKg }
                 }
-                repository.recordPerceivedEfforts(workoutId, collectedRatings, startedAt, sessionHeartRate)
+                val sessionId = UUID.randomUUID().toString()
+                finishedSessionId = sessionId
+                // The session ends now, however long the readings take to arrive.
+                val completedAt = Instant.now()
+                val readings = if (watchBridge.expectsHeartRate()) awaitHeartRate(sessionId) else null
+                repository.recordPerceivedEfforts(
+                    workoutId,
+                    collectedRatings,
+                    startedAt,
+                    sessionId,
+                    completedAt = completedAt,
+                    heartRate = readings,
+                )
+                heartRateSaved = readings?.samples?.any { it.toInt() != 0 } == true
                 readyToFinish.value = true
             }
         } else {
             exerciseIndex.value += 1
             step.value = ExerciseStep.WarmUp
+            exerciseStartedAt = Instant.now()
         }
     }
+
+    /**
+     * Waits for the watch's heart rate readings for [sessionId], showing [WorkoutSessionUiState.WaitingForHeartRate]
+     * meanwhile. Returns them, or `null` if none came, they stopped coming, or the wait was cut short by
+     * [skipHeartRate].
+     */
+    private suspend fun awaitHeartRate(sessionId: String): HeartRateRecording? {
+        waitingForHeartRate.value = true
+        val wait = viewModelScope.async { watchBridge.awaitHeartRate(sessionId, HEART_RATE_IDLE_MILLIS) }
+        heartRateWait = wait
+        return try {
+            wait.await()?.let { HeartRateRecording(it.recordingStartEpochSeconds, it.samples) }
+        } catch (cancelled: CancellationException) {
+            // Only the wait was cancelled (to skip it) unless this coroutine is too, which this rethrows.
+            currentCoroutineContext().ensureActive()
+            null
+        } finally {
+            heartRateWait = null
+            waitingForHeartRate.value = false
+        }
+    }
+
+    /** Saves the finished session without waiting any longer for the watch's heart rate readings. */
+    fun skipHeartRate() {
+        heartRateWait?.cancel()
+    }
+
+    /** [at] as seconds since the session began, which is how the watch's heart rate readings are counted. */
+    private fun secondsIntoSession(at: Instant): Int = Duration.between(startedAt, at).seconds.toInt().coerceAtLeast(0)
 
     private fun nextStep(current: ExerciseStep): ExerciseStep = when (current) {
         ExerciseStep.WarmUp -> ExerciseStep.WorkingSet(setIndex = 0)

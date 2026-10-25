@@ -21,10 +21,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
@@ -55,22 +56,41 @@ class WatchSyncService : Service() {
         )
         this.connection = connection
 
-        // The watch gets the current state whenever it changes, when a watch connects, and when
-        // it asks for it (it does so when its app starts).
+        // The watch gets the current state whenever it changes, when a watch connects, and when it is asked to be sent
+        // again (the watch asks when its app starts, and the bridge when a press came from an out-of-date screen).
+        // States go out one at a time, and while one is on its way only the latest of the newer ones is kept, so the
+        // watch is never sent a stale state after a fresh one. One that fails is sent again a few times.
         val resend = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         scope.launch {
+            var failures = 0
             combine(bridge.state, connection.isWatchConnected, resend.onStart { emit(Unit) }) { state, connected, _ ->
                 state.takeIf { connected }
-            }.filterNotNull().collect { connection.send(it) }
+            }.filterNotNull().conflate().collect { state ->
+                if (connection.sendAndAwait(state)) {
+                    failures = 0
+                } else if (++failures <= MAX_STATE_RETRIES) {
+                    delay(STATE_RETRY_MILLIS)
+                    resend.tryEmit(Unit)
+                }
+            }
         }
         scope.launch { connection.messages.collect(bridge::onWatchMessage) }
-        scope.launch {
-            bridge.commands.filterIsInstance<WatchCommand.Sync>().collect { resend.tryEmit(Unit) }
-        }
+        scope.launch { bridge.resendRequests.collect { resend.tryEmit(Unit) } }
+
+        // The session waits for the watch's heart rate readings only if there is a watch to send them.
+        scope.launch { connection.isWatchConnected.collect { bridge.watchConnected.value = it } }
         connection.start()
 
         scope.launch {
             bridge.sessionActive.filter { !it }.first()
+            if (bridge.endedFinished) {
+                // A finished workout stays on the watch so its summary can be read. Its last state, which says it is
+                // saved, may not have got through yet, so it is sent once more before the connection closes.
+                bridge.state.value?.let { connection.sendAndAwait(it) }
+            } else {
+                // Leaving or discarding a workout signs the watch off, so it does not keep showing one that is gone.
+                connection.sendAndAwait(WatchProtocol.encodeSignOff())
+            }
             stopSelf()
         }
     }
@@ -119,6 +139,8 @@ class WatchSyncService : Service() {
 
     companion object {
         private const val NOTIFICATION_ID = 1002
+        private const val MAX_STATE_RETRIES = 3
+        private const val STATE_RETRY_MILLIS = 1_000L
 
         /**
          * Does nothing unless a watch app id is configured. Must be called while the app is in the

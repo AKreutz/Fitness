@@ -187,9 +187,9 @@ fun WorkoutSessionScreen(
     // Keeps the watch connection up for as long as this screen is open.
     val context = LocalContext.current
     DisposableEffect(Unit) {
-        application.watchSessionBridge.sessionActive.value = true
+        application.watchSessionBridge.beginSession()
         WatchSyncService.start(context)
-        onDispose { application.watchSessionBridge.sessionActive.value = false }
+        onDispose { application.watchSessionBridge.endSession() }
     }
 
     // Matches Home's top bar: same TopAppBar, titled with the workout's name once known.
@@ -205,9 +205,13 @@ fun WorkoutSessionScreen(
             is WorkoutSessionUiState.Loading -> LoadingContent(Modifier.padding(innerPadding))
             is WorkoutSessionUiState.Unavailable ->
                 UnavailableContent(onCancel, Modifier.padding(innerPadding))
+            is WorkoutSessionUiState.WaitingForHeartRate -> WaitingForHeartRateContent(
+                state = state,
+                onSkip = viewModel::skipHeartRate,
+                modifier = Modifier.padding(innerPadding),
+            )
             is WorkoutSessionUiState.Finished -> WorkoutCompleteContent(
                 personalRecords = state.personalRecords,
-                heartRate = state.heartRate,
                 onDone = onFinish,
                 modifier = Modifier.padding(innerPadding),
             )
@@ -230,6 +234,55 @@ fun WorkoutSessionScreen(
 private fun LoadingContent(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator()
+    }
+}
+
+/**
+ * Shown after the last exercise while the watch sends its heart rate readings, which the workout is saved with. The
+ * ring fills as the pieces arrive; [onSkip] saves the workout without them.
+ */
+@Composable
+private fun WaitingForHeartRateContent(
+    state: WorkoutSessionUiState.WaitingForHeartRate,
+    onSkip: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        if (state.totalPieces > 0) {
+            CircularProgressIndicator(progress = { state.receivedPieces.toFloat() / state.totalPieces })
+        } else {
+            CircularProgressIndicator()
+        }
+        Text(
+            text = "Waiting for your watch",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 24.dp),
+        )
+        Text(
+            text = "Receiving your heart rate. The workout is saved as soon as it has arrived.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (state.totalPieces > 0) {
+            Text(
+                text = "${state.receivedPieces} of ${state.totalPieces}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        OutlinedButton(onClick = onSkip, modifier = Modifier.padding(top = 24.dp).pressScale()) {
+            Text("Save without heart rate")
+        }
     }
 }
 

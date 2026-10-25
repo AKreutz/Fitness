@@ -36,6 +36,8 @@ data class WorkoutSession(
     val durationSeconds: Long,
     val avgHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
+    /** The heart rate in beats per minute for each second since [startedAt], 0 where the watch had no reading. */
+    val heartRateSamples: ByteArray? = null,
     val updatedAt: Instant = Instant.now(),
 )
 

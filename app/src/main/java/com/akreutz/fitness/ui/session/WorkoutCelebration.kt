@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,7 +42,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.akreutz.fitness.data.model.HeartRateStats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -78,7 +76,6 @@ private class ConfettiPiece(
 @Composable
 internal fun WorkoutCompleteContent(
     personalRecords: Int,
-    heartRate: HeartRateStats?,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -233,9 +230,6 @@ internal fun WorkoutCompleteContent(
                 if (isRecord) {
                     PersonalRecordLine(personalRecords)
                 }
-                if (heartRate != null) {
-                    HeartRateLine(heartRate)
-                }
             }
         }
     }
@@ -257,26 +251,6 @@ private fun PersonalRecordLine(personalRecords: Int) {
             text = if (personalRecords == 1) "New personal record!" else "$personalRecords new personal records!",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.tertiary,
-        )
-    }
-}
-
-/** The session's heart rate as the watch measured it, shown under the title. */
-@Composable
-private fun HeartRateLine(heartRate: HeartRateStats) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Favorite,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "${heartRate.avgBpm} bpm avg · ${heartRate.maxBpm} bpm max",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
