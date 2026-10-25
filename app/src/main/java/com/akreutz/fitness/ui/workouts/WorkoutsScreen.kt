@@ -50,12 +50,14 @@ import com.akreutz.fitness.ui.common.ShimmerPlaceholderList
 import com.akreutz.fitness.ui.common.pressScale
 import com.akreutz.fitness.ui.common.rememberCountUp
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
+import com.akreutz.fitness.data.model.HeartRateStats
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
 import com.akreutz.fitness.data.model.heartRate
 import com.akreutz.fitness.data.model.performanceOn
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
+import com.akreutz.fitness.ui.theme.HeartRateCoral
 import com.akreutz.fitness.ui.theme.effortColors
 import java.time.Instant
 import java.time.LocalDate
@@ -87,6 +89,7 @@ private val sessionTimeFormatter: DateTimeFormatter
 @Composable
 fun WorkoutsScreen(
     uiState: WorkoutHistoryUiState,
+    onOpenHeartRate: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (uiState) {
@@ -122,13 +125,14 @@ fun WorkoutsScreen(
                 )
             }
         }
-        is WorkoutHistoryUiState.Loaded -> WorkoutHistory(uiState.sessions, modifier)
+        is WorkoutHistoryUiState.Loaded -> WorkoutHistory(uiState.sessions, onOpenHeartRate, modifier)
     }
 }
 
 @Composable
 private fun WorkoutHistory(
     sessions: List<WorkoutSessionWithWorkout>,
+    onOpenHeartRate: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val zone = ZoneId.systemDefault()
@@ -193,7 +197,11 @@ private fun WorkoutHistory(
                 )
             }
             items(entries, key = { it.first.session.id }) { (session, _) ->
-                WorkoutSessionCard(session = session, modifier = Modifier.animateItem())
+                WorkoutSessionCard(
+                    session = session,
+                    onOpenHeartRate = { onOpenHeartRate(session.session.id) },
+                    modifier = Modifier.animateItem(),
+                )
             }
         }
     }
@@ -288,6 +296,7 @@ fun WorkoutsDeleteLastConfirmationDialog(
 @Composable
 private fun WorkoutSessionCard(
     session: WorkoutSessionWithWorkout,
+    onOpenHeartRate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable(session.session.id) { mutableStateOf(false) }
@@ -357,14 +366,26 @@ private fun WorkoutSessionCard(
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut(),
             ) {
+                val heartRate = remember(session) { session.sessionHeartRate() }
                 Column {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 12.dp),
                         color = MaterialTheme.colorScheme.outlineVariant,
                     )
+                    if (heartRate != null) {
+                        HeartRateSummary(
+                            heartRate = heartRate,
+                            onOpen = onOpenHeartRate,
+                            modifier = Modifier.padding(bottom = 12.dp),
+                        )
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         session.exercises.forEach { exercise ->
-                            ExerciseStatsRow(exercise = exercise, sessionCompletedAt = session.session.completedAt)
+                            ExerciseStatsRow(
+                                exercise = exercise,
+                                sessionCompletedAt = session.session.completedAt,
+                                heartRate = heartRate?.exercises?.firstOrNull { it.exerciseId == exercise.exercise.id }?.stats,
+                            )
                         }
                     }
                 }
@@ -377,6 +398,7 @@ private fun WorkoutSessionCard(
 private fun ExerciseStatsRow(
     exercise: ExerciseWithPerformanceHistory,
     sessionCompletedAt: Instant,
+    heartRate: HeartRateStats?,
     modifier: Modifier = Modifier,
 ) {
     val entry = exercise.performanceOn(sessionCompletedAt)
@@ -385,11 +407,16 @@ private fun ExerciseStatsRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = exercise.exercise.name,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = exercise.exercise.name, style = MaterialTheme.typography.bodyLarge)
+            if (heartRate != null) {
+                Text(
+                    text = "${heartRate.avgBpm} / ${heartRate.maxBpm} bpm",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = HeartRateCoral,
+                )
+            }
+        }
         if (entry != null) {
             Text(
                 text = "${entry.weightKg.formatWeight()} kg",

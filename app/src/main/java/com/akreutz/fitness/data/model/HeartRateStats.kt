@@ -48,6 +48,18 @@ object HeartRateSamples {
         return if (last < 0) ByteArray(0) else aligned.copyOf(last + 1)
     }
 
+    /** The lowest of the readings in [window] (all of [samples] when `null`), or `null` if there are none. */
+    fun minBpm(samples: ByteArray, window: HeartRateWindow? = null): Int? {
+        val from = (window?.startSeconds ?: 0).coerceAtLeast(0)
+        val to = minOf(window?.endSeconds ?: (samples.size - 1), samples.size - 1)
+        var min = Int.MAX_VALUE
+        for (index in from..to) {
+            val bpm = samples[index].toInt() and 0xFF
+            if (bpm != 0 && bpm < min) min = bpm
+        }
+        return if (min == Int.MAX_VALUE) null else min
+    }
+
     /**
      * The average and highest of the readings in [window] (all of [samples] when `null`), or `null` if there are none.
      */

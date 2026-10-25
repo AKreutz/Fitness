@@ -69,6 +69,9 @@ val EffortMediumYellow = Color(0xFFD1B24F)
 val EffortHardRed = ErrorRed
 val OnEffort = Color(0xFF1B2430)
 
+// Heart rate readings and graphs, a soft coral kept apart from the effort red.
+val HeartRateCoral = Color(0xFFE8907F)
+
 // Barbell plate colors, one per size in PlateBreakdown.PLATE_SIZES_KG, desaturated to match the
 // app's low-saturation palette instead of using saturated competition-plate colors outright.
 val PlateBlue20 = Color(0xFF5B7FB8)

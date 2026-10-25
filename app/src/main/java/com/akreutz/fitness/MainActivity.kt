@@ -89,6 +89,7 @@ import com.akreutz.fitness.ui.session.WorkoutSessionScreen
 import com.akreutz.fitness.ui.theme.FitnessTheme
 import com.akreutz.fitness.ui.workouts.WorkoutsDeleteLastButton
 import com.akreutz.fitness.ui.workouts.WorkoutsDeleteLastConfirmationDialog
+import com.akreutz.fitness.ui.workouts.HeartRateDetailScreen
 import com.akreutz.fitness.ui.workouts.WorkoutHistoryUiState
 import com.akreutz.fitness.ui.workouts.WorkoutsScreen
 import com.akreutz.fitness.ui.workouts.WorkoutsViewModel
@@ -180,6 +181,8 @@ private const val ARG_WORKOUT_ID = "workoutId"
 private const val ROUTE_PLAN_EDITOR = "plan-editor/{trainingPlanId}"
 private const val ARG_TRAINING_PLAN_ID = "trainingPlanId"
 private const val ROUTE_WEIGHT_STACKS = "weight-stacks"
+private const val ROUTE_HEART_RATE = "heart-rate/{sessionId}"
+private const val ARG_SESSION_ID = "sessionId"
 
 private const val TAB_TRANSITION_MILLIS = 250
 private const val SCREEN_TRANSITION_MILLIS = 300
@@ -247,6 +250,18 @@ fun FitnessApp(
                 application = application,
                 onEditPlan = { trainingPlanId -> navController.navigate("plan-editor/$trainingPlanId") },
                 onEditWeightStacks = { navController.navigate(ROUTE_WEIGHT_STACKS) },
+                onOpenHeartRate = { sessionId -> navController.navigate("heart-rate/$sessionId") },
+            )
+        }
+        composable(
+            route = ROUTE_HEART_RATE,
+            arguments = listOf(navArgument(ARG_SESSION_ID) { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString(ARG_SESSION_ID) ?: return@composable
+            HeartRateDetailScreen(
+                repository = trainingPlanRepository,
+                sessionId = sessionId,
+                onBack = { navController.popBackStack() },
             )
         }
         composable(
@@ -291,6 +306,7 @@ private fun HomeScreen(
     application: FitnessApplication,
     onEditPlan: (trainingPlanId: String) -> Unit,
     onEditWeightStacks: () -> Unit,
+    onOpenHeartRate: (sessionId: String) -> Unit,
 ) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(0) }
     var showCreatePlan by rememberSaveable { mutableStateOf(false) }
@@ -405,6 +421,7 @@ private fun HomeScreen(
                     val workoutHistory by workoutsViewModel.workoutHistory.collectAsState()
                     WorkoutsScreen(
                         uiState = workoutHistory,
+                        onOpenHeartRate = onOpenHeartRate,
                         modifier = Modifier.padding(innerPadding),
                     )
                     val deleteTarget = (workoutHistory as? WorkoutHistoryUiState.Loaded)

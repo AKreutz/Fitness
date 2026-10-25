@@ -51,10 +51,10 @@ Heart rate per exercise and session
 - [x] Phone: work out the average and max heart rate of the session and of each exercise from the readings
 - [x] Phone: include the readings in Drive sync and plan export
 - [x] Phone: show the session's average heart rate in the Workouts history
-- [ ] Heart rate graph of a session
+- [x] Heart rate graph of a session
 - [ ] Heart rate recovery between sets (the readings are there; the times of the sets are not recorded yet)
 - [ ] Write the workout as a FIT strength activity so it appears in Garmin Connect
-- [ ] Show per-exercise heart rate in the expanded Workouts history
+- [x] Show per-exercise heart rate in the expanded Workouts history
 
 ## Animations
 
