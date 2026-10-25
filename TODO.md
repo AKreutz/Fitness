@@ -22,7 +22,8 @@
 
 Connect IQ watch app (Monkey C) talking to the phone app through the Connect IQ Mobile SDK. The phone stays the source of truth.
 
-- [ ] Set up the Connect IQ project and a phone-to-watch message channel (Garmin Connect Mobile required)
+- [x] Set up the Connect IQ project (`garmin/`, builds for fr745)
+- [ ] Phone-to-watch message channel (Connect IQ Mobile SDK, Garmin Connect Mobile required)
 - [ ] Define the compact message format: workout plan to the watch, logged sets back to the phone
 
 Phone-free set logging
