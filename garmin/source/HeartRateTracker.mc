@@ -1,3 +1,5 @@
+import Toybox.Activity;
+import Toybox.ActivityRecording;
 import Toybox.Lang;
 import Toybox.Sensor;
 import Toybox.System;
@@ -5,7 +7,8 @@ import Toybox.Time;
 import Toybox.WatchUi;
 
 // Measures the wearer's heart rate. While the phone's workout is running it keeps one reading for every second of it
-// (0 for a second the sensor had none), to be sent to the phone once the workout is finished.
+// (0 for a second the sensor had none), to be sent to the phone once the workout is finished. It also records the
+// workout as a strength training activity, with a lap per exercise, that the watch saves and syncs to Garmin Connect.
 class HeartRateTracker {
     // A workout longer than this stops being recorded, so the readings cannot fill the watch's memory.
     private const MAX_SECONDS = 43200;
@@ -20,6 +23,8 @@ class HeartRateTracker {
     private var mFinished as Boolean = false;
     private var mStartedAtMillis as Number = 0;
     private var mAverage as Number = 0;
+    private var mActivity as ActivityRecording.Session? = null;
+    private var mLapExerciseId as String = "";
 
     function start() as Void {
         Sensor.setEnabledSensors([Sensor.SENSOR_HEARTRATE]);
@@ -27,6 +32,7 @@ class HeartRateTracker {
     }
 
     function stop() as Void {
+        discardActivity();
         Sensor.enableSensorEvents(null);
         Sensor.setEnabledSensors([]);
     }
@@ -39,6 +45,7 @@ class HeartRateTracker {
                 mRecording = false;
                 mFinished = true;
                 mAverage = computeAverage();
+                saveActivity();
             }
         } else if (model.isActive() && !mRecording) {
             if (mFinished) {
@@ -50,6 +57,10 @@ class HeartRateTracker {
                 mStartedAtMillis = System.getTimer();
             }
             mRecording = true;
+            startActivity();
+        }
+        if (mRecording) {
+            lapOnNewExercise(model.exerciseId);
         }
     }
 
@@ -78,6 +89,7 @@ class HeartRateTracker {
 
     // Forgets every reading, for the next workout.
     function reset() as Void {
+        discardActivity();
         samples = []b;
         startEpochSeconds = 0l;
         mRecording = false;
@@ -88,6 +100,52 @@ class HeartRateTracker {
     function onSensor(info as Sensor.Info) as Void {
         currentBpm = info.heartRate;
         WatchUi.requestUpdate();
+    }
+
+    private function startActivity() as Void {
+        if (mActivity != null || !(ActivityRecording has :createSession)) {
+            return;
+        }
+        var session = ActivityRecording.createSession({
+            :name => "Strength",
+            :sport => Activity.SPORT_TRAINING,
+            :subSport => Activity.SUB_SPORT_STRENGTH_TRAINING
+        });
+        session.start();
+        mActivity = session;
+        mLapExerciseId = "";
+    }
+
+    // Marks a lap when the workout moves on to another exercise.
+    private function lapOnNewExercise(exerciseId as String) as Void {
+        var session = mActivity;
+        if (session == null || exerciseId.length() == 0 || exerciseId.equals(mLapExerciseId)) {
+            return;
+        }
+        if (mLapExerciseId.length() > 0) {
+            session.addLap();
+        }
+        mLapExerciseId = exerciseId;
+    }
+
+    // Ends the activity of a finished workout and keeps it, for the watch to sync to Garmin Connect.
+    private function saveActivity() as Void {
+        var session = mActivity;
+        mActivity = null;
+        if (session != null) {
+            session.stop();
+            session.save();
+        }
+    }
+
+    // Throws away an activity that never finished: the phone left the workout, or the app was closed during it.
+    private function discardActivity() as Void {
+        var session = mActivity;
+        mActivity = null;
+        if (session != null) {
+            session.stop();
+            session.discard();
+        }
     }
 
     private function computeAverage() as Number {

@@ -40,6 +40,12 @@ Stay on the "Finishing…" screen until it says "Workout done": leaving the watc
 they are only kept in memory. A failed piece is sent again a few times, and the whole transfer starts over twice more
 before the watch gives up ("Heart rate not saved").
 
+## Garmin activity
+
+While a workout runs, the watch also records it as a strength training activity, with a lap per exercise and the
+watch's own heart rate. When the workout is finished it saves the activity, and it syncs to Garmin Connect with the
+watch's normal sync. An activity is discarded if the phone leaves the workout or the watch app is closed before the end.
+
 ## Build
 
 Needs the Connect IQ SDK (9.2 or newer, with the Forerunner 745 device files), a developer key and Java 11 or newer
