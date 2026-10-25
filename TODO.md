@@ -54,7 +54,8 @@ Heart rate per exercise and session
 - [x] Heart rate graph of a session
 - [x] Record when each working set began and ended (Room migration 17 to 18, Drive sync, plan export)
 - [x] Heart rate recovery between sets: marks on the graph and the fall in the minute after a set, per exercise
-- [ ] Write the workout as a FIT strength activity so it appears in Garmin Connect
+- [x] Record the workout on the watch as a FIT strength activity (`ActivityRecording`, a lap per set and rest with exercise, weight, target reps and set as `FitContributor` lap fields), so it syncs to Garmin Connect
+- [ ] Revisit if Connect IQ gains support for native strength sets. As of Connect IQ 9.2 (checked October 2026) `ActivityRecording` cannot write FIT `set` / `exercise_title` messages: `FitContributor` only has `MESG_TYPE_LAP`, `MESG_TYPE_RECORD` and `MESG_TYPE_SESSION`, and developer fields cannot override what the firmware writes. So Garmin Connect's strength sets table (reps, weight, volume, exercise names) is out of reach, and the lap fields may not show on Connect's web page (try Garmin Connect Mobile). Check the `FitContributor` module docs for a set message type in new SDK releases. Until then the only way to get the native table is a FIT file built by the phone (FIT SDK for Java, `set` messages) and uploaded by hand, by USB into `GARMIN/Activity/`, or through the Garmin Connect Developer Program Activity API; a Connect IQ app cannot upload or store a file as an activity
 - [x] Show per-exercise heart rate in the expanded Workouts history
 
 ## Animations

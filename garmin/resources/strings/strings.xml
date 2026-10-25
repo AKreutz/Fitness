@@ -28,4 +28,11 @@
     <string id="HeartRateSending">Sending heart rate…</string>
     <string id="HeartRateSaved">Heart rate saved</string>
     <string id="HeartRateNotSent">Heart rate not saved</string>
+    <string id="FitExercise">Exercise</string>
+    <string id="FitWeight">Weight</string>
+    <string id="FitReps">Target reps</string>
+    <string id="FitSet">Set</string>
+    <string id="FitKg">kg</string>
+    <string id="FitDash">-</string>
+    <string id="FitRepsUnit">reps</string>
 </strings>

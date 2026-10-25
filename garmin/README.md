@@ -42,9 +42,15 @@ before the watch gives up ("Heart rate not saved").
 
 ## Garmin activity
 
-While a workout runs, the watch also records it as a strength training activity, with a lap per exercise and the
-watch's own heart rate. When the workout is finished it saves the activity, and it syncs to Garmin Connect with the
+While a workout runs, the watch also records it as a strength training activity, with a lap per working set (and per
+stretch of warm-up or rest between them) and the watch's own heart rate. Each lap carries the exercise, weight, target
+reps and set number as Connect IQ developer fields (`resources/fitfields`), meant for the Activity Laps section on
+Garmin Connect. When the workout is finished the watch saves the activity, and it syncs to Garmin Connect with the
 watch's normal sync. An activity is discarded if the phone leaves the workout or the watch app is closed before the end.
+
+Limitation: a Connect IQ app cannot write the native strength sets table (sets, reps, weight and volume per exercise),
+because `ActivityRecording` has no way to write FIT `set` messages, so Connect may not show the lap fields on its web
+page (Garmin Connect Mobile may). See the Garmin section of `TODO.md` for the details and the way around it.
 
 ## Build
 

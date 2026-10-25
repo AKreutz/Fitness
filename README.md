@@ -22,6 +22,9 @@ every set, remember how each exercise felt, and nudge the weight up when you're 
 - **Multiple plans**: switch, edit, export, import and delete them.
 - **Weight stacks**: define your gym's cable machines once and the app suggests their real next level.
 - **Google Drive sync** (optional) between devices, stored in the app's private Drive folder.
+- **Garmin watch app** (optional, Forerunner 745): follow the workout from your wrist and record your heart rate,
+  with a heart rate graph, set marks and recovery between sets in the Workouts history. The workout also syncs to
+  Garmin Connect as a strength activity. See [Garmin watch app](#garmin-watch-app).
 
 ## Using the app
 
@@ -188,6 +191,15 @@ Drive files. Tap the **sync** button in the top bar to sync on demand, a dot on 
 changes that haven't been synced yet. When two devices changed the same item, the most recent change
 wins.
 
+### Garmin watch app
+
+The optional Connect IQ app in [`garmin/`](garmin/README.md) mirrors the running workout on a Forerunner 745. You
+finish sets, rate exercises and answer the weight offer from the watch, and it records your heart rate once a
+second. The phone saves the readings with the workout, works out the average and highest heart rate of the session
+and of each exercise, and shows them in the Workouts history: a heart rate graph with a mark where each working set
+began and ended, and the fall in the minute after a set. The watch also records the workout as a strength activity
+(a lap per set) that syncs to Garmin Connect. Setup and build steps are in the [watch app README](garmin/README.md).
+
 ## Tech stack
 
 - Kotlin, Jetpack Compose, Material 3
@@ -195,6 +207,7 @@ wins.
 - Jetpack DataStore (Preferences) for lightweight app state (e.g. the active plan)
 - Jetpack Navigation Compose
 - Google Credential Manager + Drive `appDataFolder` for sync
+- Garmin Connect IQ Mobile SDK for the watch connection; the watch app is Monkey C
 - No DI framework, dependencies are plain lazily-built singletons exposed from `FitnessApplication`
 
 ## Project structure
@@ -207,10 +220,11 @@ app/src/main/java/com/akreutz/fitness/
 │   ├── prefs/        # DataStore-backed preferences
 │   ├── export/       # Plan export/import (JSON)
 │   ├── sync/         # Google Drive sync: auth, snapshot merge, change tracking
+│   ├── watch/        # Garmin watch connection, message format, heart rate receiving
 │   └── repository/   # TrainingPlanRepository, the single point the UI talks to for data
 ├── ui/
 │   ├── home/         # Home tab: active plan, onboarding / plan creation
-│   ├── workouts/     # Workouts tab: history and calendar
+│   ├── workouts/     # Workouts tab: history, calendar, heart rate graph
 │   ├── progress/     # Progress tab: charts
 │   ├── profile/      # Profile tab: plan management, plan editor, weight stacks
 │   ├── session/      # Guided workout screen, rest timer
@@ -218,6 +232,8 @@ app/src/main/java/com/akreutz/fitness/
 │   └── theme/        # Colors, effort colors, typography, theme
 ├── FitnessApplication.kt
 └── MainActivity.kt   # Navigation graph and bottom-nav scaffold
+
+garmin/               # Connect IQ watch app (Monkey C), see garmin/README.md
 ```
 
 ## Building

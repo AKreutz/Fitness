@@ -1,5 +1,6 @@
 import Toybox.Activity;
 import Toybox.ActivityRecording;
+import Toybox.FitContributor;
 import Toybox.Lang;
 import Toybox.Sensor;
 import Toybox.System;
@@ -12,6 +13,12 @@ import Toybox.WatchUi;
 class HeartRateTracker {
     // A workout longer than this stops being recorded, so the readings cannot fill the watch's memory.
     private const MAX_SECONDS = 43200;
+    // The ids of the lap fields in resources/fitfields/fitfields.xml, and the room for an exercise name in the file.
+    private const FIELD_EXERCISE = 0;
+    private const FIELD_WEIGHT = 1;
+    private const FIELD_REPS = 2;
+    private const FIELD_SET = 3;
+    private const EXERCISE_NAME_BYTES = 32;
 
     // The latest reading, or null while the sensor has none.
     public var currentBpm as Number? = null;
@@ -24,7 +31,11 @@ class HeartRateTracker {
     private var mStartedAtMillis as Number = 0;
     private var mAverage as Number = 0;
     private var mActivity as ActivityRecording.Session? = null;
-    private var mLapExerciseId as String = "";
+    private var mLapKey as String = "";
+    private var mExerciseField as FitContributor.Field? = null;
+    private var mWeightField as FitContributor.Field? = null;
+    private var mRepsField as FitContributor.Field? = null;
+    private var mSetField as FitContributor.Field? = null;
 
     function start() as Void {
         Sensor.setEnabledSensors([Sensor.SENSOR_HEARTRATE]);
@@ -60,7 +71,7 @@ class HeartRateTracker {
             startActivity();
         }
         if (mRecording) {
-            lapOnNewExercise(model.exerciseId);
+            lapOnPhase(model);
         }
     }
 
@@ -111,21 +122,48 @@ class HeartRateTracker {
             :sport => Activity.SPORT_TRAINING,
             :subSport => Activity.SUB_SPORT_STRENGTH_TRAINING
         });
+        var lap = FitContributor.MESG_TYPE_LAP;
+        mExerciseField = session.createField("exercise", FIELD_EXERCISE, FitContributor.DATA_TYPE_STRING,
+            {:mesgType => lap, :count => EXERCISE_NAME_BYTES});
+        mWeightField = session.createField("weight", FIELD_WEIGHT, FitContributor.DATA_TYPE_FLOAT,
+            {:mesgType => lap, :units => "kg"});
+        mRepsField = session.createField("reps", FIELD_REPS, FitContributor.DATA_TYPE_UINT8, {:mesgType => lap});
+        mSetField = session.createField("set", FIELD_SET, FitContributor.DATA_TYPE_UINT8, {:mesgType => lap});
         session.start();
         mActivity = session;
-        mLapExerciseId = "";
+        mLapKey = "";
     }
 
-    // Marks a lap when the workout moves on to another exercise.
-    private function lapOnNewExercise(exerciseId as String) as Void {
+    // Gives every working set, and every stretch of warm-up or rest around them, a lap of its own, labelled with the
+    // exercise, weight, target reps and set number of the set (the label alone for a stretch that is not a set).
+    private function lapOnPhase(model as SessionModel) as Void {
         var session = mActivity;
-        if (session == null || exerciseId.length() == 0 || exerciseId.equals(mLapExerciseId)) {
+        if (session == null) {
             return;
         }
-        if (mLapExerciseId.length() > 0) {
+        var working = model.phase == PHASE_WORKING;
+        var key = working ? model.exerciseId + ":" + model.setNumber
+            : (model.phase == PHASE_WARM_UP ? "warm-up" : "rest");
+        if (key.equals(mLapKey)) {
+            return;
+        }
+        if (mLapKey.length() > 0) {
             session.addLap();
         }
-        mLapExerciseId = exerciseId;
+        mLapKey = key;
+        var name = working ? model.exerciseName
+            : WatchUi.loadResource(model.phase == PHASE_WARM_UP ? Rez.Strings.WarmUp : Rez.Strings.Rest) as String;
+        var exerciseField = mExerciseField;
+        var weightField = mWeightField;
+        var repsField = mRepsField;
+        var setField = mSetField;
+        if (exerciseField == null || weightField == null || repsField == null || setField == null) {
+            return;
+        }
+        exerciseField.setData(name);
+        weightField.setData(working ? model.weightKg : 0.0);
+        repsField.setData(working ? model.targetReps : 0);
+        setField.setData(working ? model.setNumber : 0);
     }
 
     // Ends the activity of a finished workout and keeps it, for the watch to sync to Garmin Connect.
