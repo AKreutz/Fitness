@@ -18,15 +18,33 @@
 - [ ] Optional workout reminders (notification) to protect a streak
 - [ ] Define how rest days and missed weeks affect a streak
 
-## Wearable support
+## Garmin companion app (Forerunner 745)
 
-- [ ] Decide on scope: Health Connect integration, a Wear OS companion app, or both
-- [ ] Health Connect: write completed workouts as exercise sessions (duration, start/end time)
-- [ ] Health Connect: read heart rate during a session and show it in the session summary
-- [ ] Wear OS: show the current exercise, set and weight on the watch
-- [ ] Wear OS: start and skip the rest timer, and give haptic feedback when it ends
-- [ ] Wear OS: log the Easy / Medium / Hard rating from the watch
-- [ ] Permissions flow and a settings toggle to enable or disable wearable features
+Connect IQ watch app (Monkey C) talking to the phone app through the Connect IQ Mobile SDK. The phone stays the source of truth.
+
+- [ ] Set up the Connect IQ project and a phone-to-watch message channel (Garmin Connect Mobile required)
+- [ ] Define the compact message format: workout plan to the watch, logged sets back to the phone
+
+Phone-free set logging
+
+- [ ] Push the current workout plan to the watch (exercise, set number, target weight and reps)
+- [ ] Watch screen showing the current exercise and target, e.g. "Squat 80 kg x 8"
+- [ ] Log a set with one tap, with a way to adjust reps and weight first
+- [ ] Sync logged sets back to the phone and merge them into the active session
+- [ ] Start the rest timer when a set is logged and vibrate when it ends
+
+Effort capture
+
+- [ ] Rate each set (Easy / Medium / Hard) on the watch
+- [ ] Send the rating to the phone so it feeds the effort-based rep stepping and weight-increase offers
+
+Heart rate per set and session
+
+- [ ] Record average and max heart rate per set and for the whole session
+- [ ] Record heart rate recovery between sets
+- [ ] Send heart rate data to the phone and show it in the session summary
+- [ ] Write the workout as a FIT strength activity so it appears in Garmin Connect
+- [ ] Include the new fields in Drive sync and plan export (Room migration + snapshot DTO)
 
 ## Animations
 
