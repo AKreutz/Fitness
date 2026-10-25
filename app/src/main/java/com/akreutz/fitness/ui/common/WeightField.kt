@@ -50,6 +50,7 @@ fun WeightField(
     roundKg: (Double) -> Double,
     style: TextStyle,
     unitBottomPadding: Dp,
+    placeholder: String = "0",
 ) {
     var lbText by remember { mutableStateOf("") }
     val centeredStyle = style.copy(textAlign = TextAlign.Center)
@@ -67,7 +68,7 @@ fun WeightField(
     val density = LocalDensity.current
     // An empty field still gets room for the placeholder "0" so it stays tappable.
     val fieldWidth = with(density) {
-        textMeasurer.measure(shown.ifEmpty { "0" }, centeredStyle).size.width.toDp()
+        textMeasurer.measure(shown.ifEmpty { placeholder }, centeredStyle).size.width.toDp()
     } + 4.dp
     Row(verticalAlignment = Alignment.Bottom) {
         BasicTextField(
@@ -89,7 +90,7 @@ fun WeightField(
                 Box(contentAlignment = Alignment.Center) {
                     if (shown.isEmpty()) {
                         Text(
-                            text = "0",
+                            text = placeholder,
                             style = centeredStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                         )
                     }

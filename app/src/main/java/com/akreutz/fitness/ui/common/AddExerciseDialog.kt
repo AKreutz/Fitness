@@ -91,6 +91,7 @@ fun AddExerciseDialog(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) -> Unit,
 ) {
@@ -102,6 +103,7 @@ fun AddExerciseDialog(
     var weightIncrementText by remember {
         mutableStateOf(initial?.weightIncrementKg?.let(::formatKg) ?: "")
     }
+    var barWeightText by remember { mutableStateOf(initial?.barWeightKg?.let(::formatKg) ?: "") }
     var weightStackId by remember { mutableStateOf(initial?.weightStackId) }
     var weightStackMenuExpanded by remember { mutableStateOf(false) }
     var showCreateWeightStack by remember { mutableStateOf(false) }
@@ -113,6 +115,7 @@ fun AddExerciseDialog(
     // converted to kg, rounded to what can actually be loaded, and kept in kg.
     var weightLb by remember { mutableStateOf(false) }
     var weightIncrementLb by remember { mutableStateOf(false) }
+    var barWeightLb by remember { mutableStateOf(false) }
     val stackLevelsKg = weightStacks.firstOrNull { it.id == weightStackId }?.levelsKg.orEmpty()
     val roundWeightKg: (Double) -> Double = if (type == ExerciseType.CABLE) {
         { nearestLevelKg(it, stackLevelsKg) }
@@ -130,9 +133,14 @@ fun AddExerciseDialog(
     } else {
         weightIncrementText.replace(',', '.').toDoubleOrNull()
     }
+    // Blank means the standard bar; only free weights are loaded on a bar.
+    val barWeightInput = barWeightText.replace(',', '.').toDoubleOrNull()
+    val barWeightValid = type != ExerciseType.FREE_WEIGHTS || barWeightText.isBlank() ||
+        (barWeightInput != null && barWeightInput >= 0)
+    val barWeightKg = barWeightInput.takeIf { type == ExerciseType.FREE_WEIGHTS }
     val canConfirm = name.isNotBlank() && sets > 0 &&
         weightKg != null && weightKg >= 0 && weightIncrementKg != null && weightIncrementKg >= 0 &&
-        restSeconds > 0
+        barWeightValid && restSeconds > 0
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -159,6 +167,7 @@ fun AddExerciseDialog(
                                     weightKg!!,
                                     weightIncrementKg!!,
                                     weightStackId,
+                                    barWeightKg,
                                     restSeconds,
                                 )
                             },
@@ -364,6 +373,32 @@ fun AddExerciseDialog(
                                 }
                             }
                         }
+                    }
+                }
+
+                if (showIncrement) {
+                    FormSection("Bar weight (optional)") {
+                        val barBaseKg = barWeightInput ?: PlateBreakdown.BAR_WEIGHT_KG
+                        StepperRow(
+                            onMinus = {
+                                barWeightText = formatKg((barBaseKg - WEIGHT_STEP_KG).coerceAtLeast(0.0))
+                            },
+                            onPlus = { barWeightText = formatKg(barBaseKg + WEIGHT_STEP_KG) },
+                            minusDescription = "Lighter bar by ${formatKg(WEIGHT_STEP_KG)} kg",
+                            plusDescription = "Heavier bar by ${formatKg(WEIGHT_STEP_KG)} kg",
+                        ) {
+                            WeightField(
+                                kgText = barWeightText,
+                                onKgTextChange = { barWeightText = it },
+                                lbMode = barWeightLb,
+                                onLbModeChange = { barWeightLb = it },
+                                roundKg = { Math.round(it * 100) / 100.0 },
+                                style = fieldStyle,
+                                unitBottomPadding = 4.dp,
+                                placeholder = formatKg(PlateBreakdown.BAR_WEIGHT_KG),
+                            )
+                        }
+                        if (barWeightLb) KgPreview(barWeightInput)
                     }
                 }
 

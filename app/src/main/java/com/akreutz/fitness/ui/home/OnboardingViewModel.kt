@@ -75,6 +75,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         workouts = workouts.toMutableList().apply {
@@ -88,6 +89,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
                     weightKg = weightKg,
                     weightIncrementKg = weightIncrementKg,
                     weightStackId = weightStackId,
+                    barWeightKg = barWeightKg,
                     restSeconds = restSeconds,
                 ),
             )
@@ -104,6 +106,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         workouts = workouts.toMutableList().apply {
@@ -118,6 +121,7 @@ class OnboardingViewModel(private val repository: TrainingPlanRepository) : View
                         weightKg = weightKg,
                         weightIncrementKg = weightIncrementKg,
                         weightStackId = weightStackId,
+                        barWeightKg = barWeightKg,
                         restSeconds = restSeconds,
                     )
                 },

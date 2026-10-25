@@ -133,6 +133,7 @@ class TrainingPlanRepository(
                             reps = exercise.reps,
                             weightKg = exercise.weightKg,
                             weightIncrementKg = exercise.weightIncrementKg,
+                            barWeightKg = exercise.barWeightKg,
                             restSeconds = exercise.restSeconds,
                             position = exerciseIndex,
                         ),
@@ -217,6 +218,7 @@ class TrainingPlanRepository(
                         weightKg = exercise.weightKg,
                         weightIncrementKg = exercise.weightIncrementKg,
                         weightStackId = stackId,
+                        barWeightKg = exercise.barWeightKg.takeIf { type == ExerciseType.FREE_WEIGHTS },
                         restSeconds = exercise.restSeconds,
                         position = exerciseIndex,
                     )
@@ -405,6 +407,7 @@ class TrainingPlanRepository(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         database.withTransaction {
@@ -419,6 +422,7 @@ class TrainingPlanRepository(
                     weightKg = weightKg,
                     weightIncrementKg = weightIncrementKg,
                     weightStackId = weightStackId,
+                    barWeightKg = barWeightKg,
                     restSeconds = restSeconds,
                     position = position,
                 ),
@@ -504,6 +508,7 @@ class TrainingPlanRepository(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         database.exerciseDao().update(
@@ -515,6 +520,7 @@ class TrainingPlanRepository(
                 weightKg = weightKg,
                 weightIncrementKg = weightIncrementKg,
                 weightStackId = weightStackId,
+                barWeightKg = barWeightKg,
                 restSeconds = restSeconds,
                 updatedAt = Instant.now(),
             ),

@@ -85,6 +85,7 @@ fun ActiveTrainingPlanView(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) -> Unit,
     modifier: Modifier = Modifier,
@@ -131,7 +132,7 @@ fun ActiveTrainingPlanView(
             weightStacks = weightStacks,
             onCreateWeightStack = onCreateWeightStack,
             onDismiss = { editingExerciseId = null },
-            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, weightStackId, restSeconds ->
+            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, weightStackId, barWeightKg, restSeconds ->
                 onUpdateExercise(
                     target.exercise,
                     name,
@@ -141,6 +142,7 @@ fun ActiveTrainingPlanView(
                     weightKg,
                     weightIncrementKg,
                     weightStackId,
+                    barWeightKg,
                     restSeconds,
                 )
                 editingExerciseId = null

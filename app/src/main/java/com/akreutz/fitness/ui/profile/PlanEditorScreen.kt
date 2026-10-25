@@ -227,6 +227,7 @@ private fun PlanEditorContent(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) -> Unit,
     onUpdateExercise: (
@@ -238,6 +239,7 @@ private fun PlanEditorContent(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) -> Unit,
     onDeleteExercise: (exercise: Exercise) -> Unit,
@@ -373,7 +375,7 @@ private fun PlanEditorContent(
             weightStacks = weightStacks,
             onCreateWeightStack = onCreateWeightStack,
             onDismiss = { exerciseDialogTarget = null },
-            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, weightStackId, restSeconds ->
+            onConfirm = { name, type, sets, reps, weightKg, weightIncrementKg, weightStackId, barWeightKg, restSeconds ->
                 if (exercise == null) {
                     onAddExercise(
                         workout.id,
@@ -384,6 +386,7 @@ private fun PlanEditorContent(
                         weightKg,
                         weightIncrementKg,
                         weightStackId,
+                        barWeightKg,
                         restSeconds,
                     )
                 } else {
@@ -396,6 +399,7 @@ private fun PlanEditorContent(
                         weightKg,
                         weightIncrementKg,
                         weightStackId,
+                        barWeightKg,
                         restSeconds,
                     )
                 }
@@ -670,5 +674,6 @@ internal fun Exercise.toDraft(): DraftExercise = DraftExercise(
     weightKg = weightKg,
     weightIncrementKg = weightIncrementKg,
     weightStackId = weightStackId,
+    barWeightKg = barWeightKg,
     restSeconds = restSeconds,
 )

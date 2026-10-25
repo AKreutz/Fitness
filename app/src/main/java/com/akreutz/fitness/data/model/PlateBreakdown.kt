@@ -22,12 +22,20 @@ object PlateBreakdown {
         ((kg / LOAD_STEP_KG).roundToLong() * LOAD_STEP_KG).coerceAtLeast(0.0)
 
     /**
+     * [kg] rounded to the closest total weight loadable on a bar of [barWeightKg], i.e. the bar
+     * plus a whole number of [LOAD_STEP_KG]s. A bar that isn't a multiple of the step (e.g. 19 lb)
+     * makes the plain [nearestLoadable] totals unreachable, hence this variant. Never below the bar.
+     */
+    fun nearestLoadable(kg: Double, barWeightKg: Double): Double =
+        barWeightKg + nearestLoadable(kg - barWeightKg)
+
+    /**
      * The plates needed on one side of the bar to reach [totalWeightKg], largest first, or an
-     * empty list if [totalWeightKg] is at or below [BAR_WEIGHT_KG] (nothing to load) or the
+     * empty list if [totalWeightKg] is at or below [barWeightKg] (nothing to load) or the
      * remainder can't be made up exactly from [PLATE_SIZES_KG].
      */
-    fun forWeight(totalWeightKg: Double): List<Double> {
-        val perSideKg = (totalWeightKg - BAR_WEIGHT_KG) / 2.0
+    fun forWeight(totalWeightKg: Double, barWeightKg: Double = BAR_WEIGHT_KG): List<Double> {
+        val perSideKg = (totalWeightKg - barWeightKg) / 2.0
         if (perSideKg <= 0.0) return emptyList()
 
         // Work in hundredths of a KG (integers) to avoid floating-point drift while subtracting

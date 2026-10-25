@@ -59,6 +59,7 @@ data class PlanExportExerciseDto(
     val weightKg: Double,
     val weightIncrementKg: Double,
     val restSeconds: Int,
+    val barWeightKg: Double? = null,
     val weightStack: PlanExportWeightStackDto? = null,
     val history: List<PlanExportPerformanceDto> = emptyList(),
 )
@@ -115,6 +116,7 @@ object PlanExportCodec {
                                     weightKg = exercise.weightKg,
                                     weightIncrementKg = exercise.weightIncrementKg,
                                     restSeconds = exercise.restSeconds,
+                                    barWeightKg = exercise.barWeightKg,
                                     weightStack = exercise.weightStackId
                                         ?.let { stacksById[it] }
                                         ?.let { PlanExportWeightStackDto(it.name, it.levelsKg) },

@@ -1140,8 +1140,8 @@ private fun formatKg(kg: Double): String =
 
 /**
  * Card for the exercise currently being guided through: during warm-up, just says so; otherwise
- * the plate breakdown (for free-weight exercises) on the left and the prescribed weight/reps on
- * the right.
+ * the plate breakdown (for free-weight exercises) on the left and the weight to load and target
+ * reps on the right.
  */
 @Composable
 private fun CurrentExerciseCard(
@@ -1180,7 +1180,10 @@ private fun CurrentExerciseCard(
                 .padding(18.dp),
         ) {
             if (exercise.exercise.type == ExerciseType.FREE_WEIGHTS) {
-                PlateBreakdownRow(weightKg = exercise.exercise.weightKg)
+                PlateBreakdownRow(
+                    weightKg = exercise.exercise.weightKg,
+                    barWeightKg = exercise.exercise.barWeightKg ?: PlateBreakdown.BAR_WEIGHT_KG,
+                )
             } else {
                 val stack = weightStacks.firstOrNull { it.id == exercise.exercise.weightStackId }
                 StackBreakdownRow(
@@ -1191,9 +1194,19 @@ private fun CurrentExerciseCard(
             }
             val lastPerceivedEffort = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
             val targetReps = RepScheme.targetReps(exercise.exercise.reps, lastPerceivedEffort)
+            // For free weights this is what's actually on the bar, which can differ from the
+            // target when the bar isn't a multiple of the plate step; the set cards show the target.
+            val shownWeightKg = if (exercise.exercise.type == ExerciseType.FREE_WEIGHTS) {
+                PlateBreakdown.nearestLoadable(
+                    exercise.exercise.weightKg,
+                    exercise.exercise.barWeightKg ?: PlateBreakdown.BAR_WEIGHT_KG,
+                )
+            } else {
+                exercise.exercise.weightKg
+            }
             Column(horizontalAlignment = Alignment.End) {
                 RollingNumberText(
-                    value = exercise.exercise.weightKg,
+                    value = shownWeightKg,
                     format = { String.format(Locale.US, "%.1f KG", it) },
                     style = MaterialTheme.typography.headlineSmall,
                 )
@@ -1251,13 +1264,20 @@ private fun onPlateColor(plateKg: Double): Color = when (plateKg) {
  * A visual breakdown of the barbell plates needed per side to reach [weightKg]: a side-on view
  * of the bar's sleeve and collar with each plate drawn as a color-coded disc seen edge-on, sized
  * by weight, labeled with its weight, and stacked in loading order — largest first, closest to
- * the collar. Shows the empty bar (no plates) at exactly [PlateBreakdown.BAR_WEIGHT_KG], and
- * nothing if [weightKg] can't be made up exactly from [PlateBreakdown.PLATE_SIZES_KG].
+ * the collar. Shows the empty bar (no plates) at exactly [barWeightKg], and nothing if
+ * [weightKg] can't be made up exactly from [PlateBreakdown.PLATE_SIZES_KG].
  */
 @Composable
-private fun PlateBreakdownRow(weightKg: Double, modifier: Modifier = Modifier) {
-    val plates = PlateBreakdown.forWeight(weightKg)
-    if (plates.isEmpty() && weightKg != PlateBreakdown.BAR_WEIGHT_KG) return
+private fun PlateBreakdownRow(
+    weightKg: Double,
+    barWeightKg: Double,
+    modifier: Modifier = Modifier,
+) {
+    // A bar that isn't a multiple of the plate step can't hit weightKg exactly, so show the
+    // closest weight the plates can make.
+    val loadableKg = PlateBreakdown.nearestLoadable(weightKg, barWeightKg)
+    val plates = PlateBreakdown.forWeight(loadableKg, barWeightKg)
+    if (plates.isEmpty() && loadableKg != barWeightKg) return
 
     BarbellSideView(plates = plates, modifier = modifier)
 }

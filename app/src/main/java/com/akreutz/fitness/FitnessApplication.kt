@@ -3,6 +3,7 @@ package com.akreutz.fitness
 import android.app.Application
 import android.util.Log
 import androidx.room.Room
+import com.akreutz.fitness.data.db.ALL_MIGRATIONS
 import com.akreutz.fitness.data.db.FitnessDatabase
 import com.akreutz.fitness.data.prefs.ActivePlanPreferences
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
@@ -44,9 +45,7 @@ class FitnessApplication : Application() {
 
     private val database: FitnessDatabase by lazy {
         Room.databaseBuilder(this, FitnessDatabase::class.java, FitnessDatabase.DATABASE_NAME)
-            // No migrations exist yet; the app is early enough in development that resetting
-            // local data on a schema change is acceptable.
-            .fallbackToDestructiveMigration(dropAllTables = true)
+            .addMigrations(*ALL_MIGRATIONS)
             .build()
     }
 

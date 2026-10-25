@@ -85,6 +85,7 @@ class PlanEditorViewModel(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         viewModelScope.launch {
@@ -97,6 +98,7 @@ class PlanEditorViewModel(
                 weightKg,
                 weightIncrementKg,
                 weightStackId,
+                barWeightKg,
                 restSeconds,
             )
         }
@@ -111,6 +113,7 @@ class PlanEditorViewModel(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         viewModelScope.launch {
@@ -123,6 +126,7 @@ class PlanEditorViewModel(
                 weightKg,
                 weightIncrementKg,
                 weightStackId,
+                barWeightKg,
                 restSeconds,
             )
         }

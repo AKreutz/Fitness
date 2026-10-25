@@ -15,7 +15,9 @@ import java.util.UUID
  * [weightIncrementKg] is how much it should go up by between progressions; for a
  * [ExerciseType.CABLE] exercise it's unused (always `0.0`) and [weightStackId] takes its place —
  * `null` (the default "None" stack) means weight-increase suggestions are typed freely, while a
- * real [WeightStack] id means the next level in that stack is suggested instead. [restSeconds] is
+ * real [WeightStack] id means the next level in that stack is suggested instead. [barWeightKg] is
+ * the weight of the barbell for a [ExerciseType.FREE_WEIGHTS] exercise, or `null` to assume
+ * [PlateBreakdown.BAR_WEIGHT_KG]. [restSeconds] is
  * how long to rest between working sets during a guided session. [position] defines its order
  * within the workout. [updatedAt] is when it was last written, for future multi-device sync to
  * merge by.
@@ -46,6 +48,7 @@ data class Exercise(
     val weightKg: Double,
     val weightIncrementKg: Double,
     val weightStackId: String? = null,
+    val barWeightKg: Double? = null,
     val restSeconds: Int = DEFAULT_REST_SECONDS,
     val position: Int,
     val updatedAt: Instant = Instant.now(),

@@ -12,6 +12,7 @@ data class DraftExercise(
     val weightKg: Double,
     val weightIncrementKg: Double,
     val weightStackId: String? = null,
+    val barWeightKg: Double? = null,
     val restSeconds: Int = Exercise.DEFAULT_REST_SECONDS,
 )
 

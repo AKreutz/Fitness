@@ -92,6 +92,7 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         viewModelScope.launch {
@@ -104,6 +105,7 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
                 weightKg,
                 weightIncrementKg,
                 weightStackId,
+                barWeightKg,
                 restSeconds,
             )
         }
@@ -119,6 +121,7 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
         weightKg: Double,
         weightIncrementKg: Double,
         weightStackId: String?,
+        barWeightKg: Double?,
         restSeconds: Int,
     ) {
         viewModelScope.launch {
@@ -131,6 +134,7 @@ class HomeViewModel(private val repository: TrainingPlanRepository) : ViewModel(
                 weightKg = weightKg,
                 weightIncrementKg = weightIncrementKg,
                 weightStackId = weightStackId,
+                barWeightKg = barWeightKg,
                 restSeconds = restSeconds,
             )
         }
