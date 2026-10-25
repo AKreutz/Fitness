@@ -163,8 +163,6 @@ private const val HEART_RATE_IDLE_MILLIS = 20_000L
  * target then also prompts whether to raise its weight for next time (via
  * [respondToWeightIncreaseOffer]). Once the workout's last exercise is rated (and any such offer
  * answered), persists all of the session's ratings under today's date and finishes the session.
- * When a rest period reaches its exercise's prescribed rest duration, [restTimerAlerter] is fired
- * once (not on every later tick) to notify the user that rest is over.
  *
  * The session can also be run from the watch: its state is published to [watchBridge] (see
  * [WatchProtocol]) and the commands the watch sends back do the same as the buttons on screen. When the watch is there
@@ -175,7 +173,6 @@ private const val HEART_RATE_IDLE_MILLIS = 20_000L
 class WorkoutSessionViewModel(
     private val repository: TrainingPlanRepository,
     private val workoutId: String,
-    private val restTimerAlerter: RestTimerAlerter,
     private val watchBridge: WatchSessionBridge,
 ) : ViewModel() {
 
@@ -604,17 +601,11 @@ class WorkoutSessionViewModel(
         restStartedAtEpochSeconds = Instant.now().epochSecond
         resting.value = true
         recoverySeconds.value = 0
-        val goalSeconds = latestExercises?.getOrNull(exerciseIndex.value)?.exercise?.restSeconds
-        var alerted = false
         recoveryJob = viewModelScope.launch {
             while (true) {
                 delay(RECOVERY_TICK_MILLIS)
                 val seconds = (recoverySeconds.value ?: 0) + 1
                 recoverySeconds.value = seconds
-                if (!alerted && goalSeconds != null && seconds >= goalSeconds) {
-                    alerted = true
-                    restTimerAlerter.onRestGoalReached()
-                }
             }
         }
     }
@@ -636,12 +627,11 @@ class WorkoutSessionViewModel(
 class WorkoutSessionViewModelFactory(
     private val repository: TrainingPlanRepository,
     private val workoutId: String,
-    private val restTimerAlerter: RestTimerAlerter,
     private val watchBridge: WatchSessionBridge,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         require(modelClass.isAssignableFrom(WorkoutSessionViewModel::class.java))
-        return WorkoutSessionViewModel(repository, workoutId, restTimerAlerter, watchBridge) as T
+        return WorkoutSessionViewModel(repository, workoutId, watchBridge) as T
     }
 }

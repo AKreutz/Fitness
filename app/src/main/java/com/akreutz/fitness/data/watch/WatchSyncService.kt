@@ -113,7 +113,7 @@ class WatchSyncService : Service() {
             )
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
-        // Like RestTimerAlerter's notification, this only brings the running activity to the front,
+        // This only brings the running activity to the front,
         // so a tap does not reset its in-memory navigation state.
         val openApp = PendingIntent.getActivity(
             this,

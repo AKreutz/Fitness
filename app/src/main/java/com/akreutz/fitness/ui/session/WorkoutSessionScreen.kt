@@ -166,14 +166,13 @@ fun WorkoutSessionScreen(
         factory = WorkoutSessionViewModelFactory(
             repository,
             workoutId,
-            application.restTimerAlerter,
             application.watchSessionBridge,
         ),
     )
     val uiState by viewModel.uiState.collectAsState()
     val weightStacks by repository.observeWeightStacks().collectAsState(initial = emptyList())
 
-    // So the rest timer's notification (see RestTimerAlerter) can actually be shown; harmless to
+    // So the watch sync's foreground notification can actually be shown; harmless to
     // ask every time the screen opens, since the system no-ops once already granted or denied.
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),

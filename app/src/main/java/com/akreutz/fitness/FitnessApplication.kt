@@ -12,7 +12,6 @@ import com.akreutz.fitness.data.sync.SyncManager
 import com.akreutz.fitness.data.sync.auth.GoogleAuthManager
 import com.akreutz.fitness.data.sync.drive.GoogleDriveDataSource
 import com.akreutz.fitness.data.watch.WatchSessionBridge
-import com.akreutz.fitness.ui.session.RestTimerAlerter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,14 +34,6 @@ sealed interface SyncState {
  */
 class FitnessApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    override fun onCreate() {
-        super.onCreate()
-        RestTimerAlerter.ensureChannel(this)
-    }
-
-    /** Vibrates/notifies when a guided workout session's rest timer reaches its goal. */
-    val restTimerAlerter: RestTimerAlerter by lazy { RestTimerAlerter(this) }
 
     private val database: FitnessDatabase by lazy {
         Room.databaseBuilder(this, FitnessDatabase::class.java, FitnessDatabase.DATABASE_NAME)
