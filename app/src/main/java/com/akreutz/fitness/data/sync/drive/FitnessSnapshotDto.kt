@@ -203,6 +203,7 @@ data class ExercisePerformanceRecordDto(
     val maxHeartRateBpm: Int? = null,
     val heartRateStartSeconds: Int? = null,
     val heartRateEndSeconds: Int? = null,
+    val setWindows: String? = null,
     val updatedAt: Long,
 ) {
     fun toEntity(): ExercisePerformanceRecord = ExercisePerformanceRecord(
@@ -215,6 +216,7 @@ data class ExercisePerformanceRecordDto(
         maxHeartRateBpm = maxHeartRateBpm,
         heartRateStartSeconds = heartRateStartSeconds,
         heartRateEndSeconds = heartRateEndSeconds,
+        setWindows = setWindows,
         updatedAt = Instant.ofEpochMilli(updatedAt),
     )
 
@@ -229,6 +231,7 @@ data class ExercisePerformanceRecordDto(
             maxHeartRateBpm = entity.maxHeartRateBpm,
             heartRateStartSeconds = entity.heartRateStartSeconds,
             heartRateEndSeconds = entity.heartRateEndSeconds,
+            setWindows = entity.setWindows,
             updatedAt = entity.updatedAt.toEpochMilli(),
         )
     }

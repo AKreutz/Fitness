@@ -223,6 +223,12 @@ class WorkoutSessionViewModel(
     /** When the exercise now shown began, to tell where in the session each exercise was done. */
     private var exerciseStartedAt: Instant = startedAt
 
+    /** When the working set now under way began, or `null` while warming up or resting. */
+    private var setStartedAt: Instant? = null
+
+    /** When in the session each working set of the current exercise began and ended, in order. */
+    private val setWindows = mutableListOf<HeartRateWindow>()
+
     /** When the current rest began, in epoch seconds, for the watch's own rest timer. */
     private var restStartedAtEpochSeconds: Long? = null
 
@@ -405,15 +411,19 @@ class WorkoutSessionViewModel(
         if (resting.value) {
             stopRecoveryTimer()
             step.value = nextStep(step.value)
+            setStartedAt = Instant.now()
             return
         }
 
         val currentStep = step.value
         if (currentStep is ExerciseStep.WarmUp) {
             step.value = nextStep(currentStep)
+            setStartedAt = Instant.now()
             return
         }
 
+        setStartedAt?.let { setWindows += HeartRateWindow(secondsIntoSession(it), secondsIntoSession(Instant.now())) }
+        setStartedAt = null
         val currentSetCount = latestExercises?.getOrNull(exerciseIndex.value)?.exercise?.sets ?: 0
         val isLastSet = (currentStep as ExerciseStep.WorkingSet).setIndex == currentSetCount - 1
         if (isLastSet) {
@@ -479,6 +489,7 @@ class WorkoutSessionViewModel(
                 startSeconds = secondsIntoSession(exerciseStartedAt),
                 endSeconds = secondsIntoSession(Instant.now()),
             ),
+            setWindows = setWindows.toList(),
         )
         exerciseToRate.value = null
 
@@ -550,6 +561,8 @@ class WorkoutSessionViewModel(
             exerciseIndex.value += 1
             step.value = ExerciseStep.WarmUp
             exerciseStartedAt = Instant.now()
+            setStartedAt = null
+            setWindows.clear()
         }
     }
 

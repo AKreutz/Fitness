@@ -57,6 +57,7 @@ data class PlanExportPerformanceDto(
     val maxHeartRateBpm: Int? = null,
     val heartRateStartSeconds: Int? = null,
     val heartRateEndSeconds: Int? = null,
+    val setWindows: String? = null,
 )
 
 @Serializable
@@ -143,6 +144,7 @@ object PlanExportCodec {
                                                 maxHeartRateBpm = it.maxHeartRateBpm,
                                                 heartRateStartSeconds = it.heartRateStartSeconds,
                                                 heartRateEndSeconds = it.heartRateEndSeconds,
+                                                setWindows = it.setWindows,
                                             )
                                         },
                                 )

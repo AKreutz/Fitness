@@ -1,5 +1,7 @@
 package com.akreutz.fitness.data.model
 
+import kotlin.math.roundToInt
+
 /** Average and highest heart rate, in beats per minute, measured by the watch over some period. */
 data class HeartRateStats(
     val avgBpm: Int,
@@ -12,6 +14,18 @@ fun heartRateStats(avgBpm: Int?, maxBpm: Int?): HeartRateStats? =
 
 /** A stretch of a session, in seconds since it began, from [startSeconds] to [endSeconds]. */
 data class HeartRateWindow(val startSeconds: Int, val endSeconds: Int)
+
+/** Stores the stretches of a session an exercise's sets took as text, e.g. `312-358,410-452`, and reads them back. */
+object SetWindows {
+    fun encode(windows: List<HeartRateWindow>): String? =
+        if (windows.isEmpty()) null else windows.joinToString(",") { "${it.startSeconds}-${it.endSeconds}" }
+
+    fun decode(text: String?): List<HeartRateWindow> =
+        text.orEmpty().split(',').mapNotNull { part ->
+            val (start, end) = part.split('-').takeIf { it.size == 2 } ?: return@mapNotNull null
+            HeartRateWindow(start.toIntOrNull() ?: return@mapNotNull null, end.toIntOrNull() ?: return@mapNotNull null)
+        }
+}
 
 /**
  * The readings the watch took for a session: one per second from [startEpochSeconds], each a heart rate in beats per
@@ -46,6 +60,21 @@ object HeartRateSamples {
         }
         val last = aligned.indexOfLast { it.toInt() != 0 }
         return if (last < 0) ByteArray(0) else aligned.copyOf(last + 1)
+    }
+
+    /**
+     * How far the heart rate fell in the minute after a set, averaged over the rests of at least a minute that follow
+     * one of [sets]: from the average of the set's last 5 seconds to the average of the 2 seconds a minute after it
+     * ended. `null` if no rest was long enough or the readings are missing.
+     */
+    fun recoveryDrop(samples: ByteArray, sets: List<HeartRateWindow>): Int? {
+        val drops = sets.zipWithNext().mapNotNull { (set, next) ->
+            if (next.startSeconds - set.endSeconds < 60) return@mapNotNull null
+            val atEnd = stats(samples, HeartRateWindow((set.endSeconds - 5).coerceAtLeast(0), set.endSeconds))
+            val later = stats(samples, HeartRateWindow(set.endSeconds + 58, set.endSeconds + 60))
+            if (atEnd == null || later == null) null else atEnd.avgBpm - later.avgBpm
+        }
+        return if (drops.isEmpty()) null else (drops.sum().toDouble() / drops.size).roundToInt()
     }
 
     /** The lowest of the readings in [window] (all of [samples] when `null`), or `null` if there are none. */

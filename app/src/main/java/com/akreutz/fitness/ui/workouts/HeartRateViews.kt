@@ -51,6 +51,10 @@ internal class ExerciseHeartRate(
     val window: HeartRateWindow,
     val stats: HeartRateStats,
     val minBpm: Int,
+    /** When each working set began and ended, if recorded. */
+    val sets: List<HeartRateWindow>,
+    /** How far the heart rate fell in the minute after a set, on average; see [HeartRateSamples.recoveryDrop]. */
+    val recoveryBpm: Int?,
 )
 
 /**
@@ -76,7 +80,8 @@ internal fun WorkoutSessionWithWorkout.sessionHeartRate(): SessionHeartRate? {
     val stats = HeartRateSamples.stats(samples) ?: return null
     val minBpm = HeartRateSamples.minBpm(samples) ?: return null
     val exerciseRates = exercises.mapNotNull { exercise ->
-        val window = exercise.performanceOn(session.completedAt)?.heartRateWindow ?: return@mapNotNull null
+        val entry = exercise.performanceOn(session.completedAt)
+        val window = entry?.heartRateWindow ?: return@mapNotNull null
         val exerciseStats = HeartRateSamples.stats(samples, window) ?: return@mapNotNull null
         ExerciseHeartRate(
             exerciseId = exercise.exercise.id,
@@ -84,6 +89,8 @@ internal fun WorkoutSessionWithWorkout.sessionHeartRate(): SessionHeartRate? {
             window = window,
             stats = exerciseStats,
             minBpm = HeartRateSamples.minBpm(samples, window) ?: exerciseStats.avgBpm,
+            sets = entry.setWindows,
+            recoveryBpm = HeartRateSamples.recoveryDrop(samples, entry.setWindows),
         )
     }.sortedBy { it.window.startSeconds }
     val peakSecond = samples.indexOfFirst { (it.toInt() and 0xFF) == stats.maxBpm }
@@ -277,6 +284,16 @@ internal fun HeartRateGraph(
         }
 
         if (!detailed) return@Canvas
+
+        // The working sets, as marks along the bottom of the plot.
+        val markHeight = 4.dp.toPx()
+        heartRate.exercises.forEach { exercise ->
+            exercise.sets.forEach { set ->
+                val left = xAt(set.startSeconds.toFloat())
+                val right = xAt(set.endSeconds.toFloat())
+                drawRect(HeartRateCoral, Offset(left, plotHeight - markHeight), Size(max(right - left, 2.dp.toPx()), markHeight))
+            }
+        }
 
         peakPoint?.let { point ->
             drawCircle(markerRing, radius = 7.dp.toPx(), center = point)

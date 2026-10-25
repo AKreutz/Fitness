@@ -32,4 +32,11 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
     }
 }
 
-val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+/** Adds when each working set of an exercise began and ended; existing rows keep `NULL`. */
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `exercise_performance_records` ADD COLUMN `setWindows` TEXT")
+    }
+}
+
+val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)

@@ -12,6 +12,7 @@ import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.HeartRateRecording
 import com.akreutz.fitness.data.model.HeartRateSamples
+import com.akreutz.fitness.data.model.SetWindows
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
@@ -240,6 +241,7 @@ class TrainingPlanRepository(
                                 maxHeartRateBpm = record.maxHeartRateBpm,
                                 heartRateStartSeconds = record.heartRateStartSeconds,
                                 heartRateEndSeconds = record.heartRateEndSeconds,
+                                setWindows = record.setWindows,
                             ),
                         )
                     }
@@ -348,6 +350,7 @@ class TrainingPlanRepository(
                         maxHeartRateBpm = stats?.maxBpm,
                         heartRateStartSeconds = entry.heartRateWindow?.startSeconds,
                         heartRateEndSeconds = entry.heartRateWindow?.endSeconds,
+                        setWindows = SetWindows.encode(entry.setWindows),
                     ),
                 )
             }

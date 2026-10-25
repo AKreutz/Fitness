@@ -21,7 +21,7 @@ import com.akreutz.fitness.data.model.WorkoutSession
         PurgedId::class,
         WeightStack::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

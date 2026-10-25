@@ -116,6 +116,34 @@ fun HeartRateDetailScreen(
             HeartRateCard {
                 Text(text = "Over the session", style = MaterialTheme.typography.titleSmall)
                 HeartRateGraph(heartRate, Modifier.fillMaxWidth().height(256.dp), detailed = true)
+                if (heartRate.exercises.any { it.sets.isNotEmpty() }) {
+                    Text(
+                        text = "Marks along the bottom are the working sets.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            val recoveries = heartRate.exercises.filter { it.recoveryBpm != null }
+            if (recoveries.isNotEmpty()) {
+                HeartRateCard {
+                    Text(text = "Recovery", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        text = "How far your heart rate fell in the minute after a set, on average.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    recoveries.forEach { exercise ->
+                        Row {
+                            Text(text = exercise.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Text(
+                                text = "−${exercise.recoveryBpm} bpm",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = HeartRateCoral,
+                            )
+                        }
+                    }
+                }
             }
             if (heartRate.exercises.isNotEmpty()) {
                 HeartRateCard {

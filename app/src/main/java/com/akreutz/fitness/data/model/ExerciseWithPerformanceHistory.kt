@@ -9,6 +9,7 @@ data class ExercisePerformanceEntry(
     val weightKg: Double,
     val perceivedEffort: PerceivedEffort,
     val heartRateWindow: HeartRateWindow? = null,
+    val setWindows: List<HeartRateWindow> = emptyList(),
 )
 
 /**
@@ -34,7 +35,7 @@ data class ExerciseWithPerformanceHistory(
     val records: List<ExercisePerformanceRecord>,
 ) {
     val performanceHistory: ExercisePerformanceHistory
-        get() = records.associate { it.completedAt to ExercisePerformanceEntry(it.weightKg, it.perceivedEffort, it.heartRateWindow) }
+        get() = records.associate { it.completedAt to ExercisePerformanceEntry(it.weightKg, it.perceivedEffort, it.heartRateWindow, it.sets) }
 }
 
 /**
