@@ -20,6 +20,7 @@ googleApiClientAndroid = "2.7.2"
 googleApiServicesDrive = "v3-rev20260901-2.0.0"
 googleHttpClientGson = "1.47.0"
 kotlinxSerializationJson = "1.7.3"
+garminCiqCompanionAppSdk = "2.4.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -52,6 +53,7 @@ google-api-client-android = { group = "com.google.api-client", name = "google-ap
 google-api-services-drive = { group = "com.google.apis", name = "google-api-services-drive", version.ref = "googleApiServicesDrive" }
 google-http-client-gson = { group = "com.google.http-client", name = "google-http-client-gson", version.ref = "googleHttpClientGson" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+garmin-ciq-companion-app-sdk = { group = "com.garmin.connectiq", name = "ciq-companion-app-sdk", version.ref = "garminCiqCompanionAppSdk" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

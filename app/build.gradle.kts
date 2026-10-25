@@ -42,6 +42,16 @@ android {
             "GOOGLE_WEB_CLIENT_ID",
             "\"687263755684-om48hi26v158r5v76qllekdppeb3gp4l.apps.googleusercontent.com\"",
         )
+
+        // The watch app's id from its Connect IQ manifest (garmin/manifest.xml). Empty disables
+        // the watch connection.
+        buildConfigField("String", "GARMIN_APP_ID", "\"${localProperties.getProperty("garmin.appId", "")}\"")
+        // true talks to the Connect IQ simulator over adb instead of a real watch.
+        buildConfigField(
+            "boolean",
+            "GARMIN_USE_SIMULATOR",
+            localProperties.getProperty("garmin.useSimulator", "false"),
+        )
     }
 
     signingConfigs {
@@ -134,6 +144,9 @@ dependencies {
         exclude(group = "org.apache.httpcomponents")
     }
     implementation(libs.google.http.client.gson)
+
+    // Garmin watch companion app: Connect IQ Mobile SDK for talking to the watch app in garmin/.
+    implementation(libs.garmin.ciq.companion.app.sdk)
 
     ksp(libs.androidx.room.compiler)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

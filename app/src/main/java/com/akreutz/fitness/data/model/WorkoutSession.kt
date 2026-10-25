@@ -34,5 +34,11 @@ data class WorkoutSession(
     val startedAt: Instant,
     val completedAt: Instant,
     val durationSeconds: Long,
+    val avgHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
     val updatedAt: Instant = Instant.now(),
 )
+
+/** The heart rate the watch measured during this session, if it did. */
+val WorkoutSession.heartRate: HeartRateStats?
+    get() = heartRateStats(avgHeartRateBpm, maxHeartRateBpm)

@@ -10,6 +10,7 @@ import com.akreutz.fitness.data.model.Exercise
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
 import com.akreutz.fitness.data.model.ExercisePerformanceRecord
 import com.akreutz.fitness.data.model.ExerciseType
+import com.akreutz.fitness.data.model.HeartRateStats
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.PurgedId
 import com.akreutz.fitness.data.model.TrainingPlan
@@ -201,6 +202,8 @@ class TrainingPlanRepository(
                             startedAt = Instant.ofEpochMilli(session.startedAt),
                             completedAt = Instant.ofEpochMilli(session.completedAt),
                             durationSeconds = session.durationSeconds,
+                            avgHeartRateBpm = session.avgHeartRateBpm,
+                            maxHeartRateBpm = session.maxHeartRateBpm,
                         ),
                     )
                 }
@@ -230,6 +233,8 @@ class TrainingPlanRepository(
                                 completedAt = Instant.ofEpochMilli(record.completedAt),
                                 weightKg = record.weightKg,
                                 perceivedEffort = PerceivedEffort.valueOf(record.perceivedEffort),
+                                avgHeartRateBpm = record.avgHeartRateBpm,
+                                maxHeartRateBpm = record.maxHeartRateBpm,
                             ),
                         )
                     }
@@ -298,12 +303,14 @@ class TrainingPlanRepository(
      * aren't affected by a same-session weight increase (see [setExerciseWeight]) applied to an
      * earlier-rated exercise afterwards. Keying by the exact completion instant (rather than just
      * the date) means a second workout completed the same day gets its own entry instead of
-     * overwriting the first's.
+     * overwriting the first's. [heartRate] is the whole session's, when the watch measured it; each
+     * entry carries its own exercise's.
      */
     suspend fun recordPerceivedEfforts(
         workoutId: String,
         entries: Map<String, ExercisePerformanceEntry>,
         startedAt: Instant,
+        heartRate: HeartRateStats? = null,
     ) {
         val completedAt = Instant.now()
         database.withTransaction {
@@ -314,6 +321,8 @@ class TrainingPlanRepository(
                         completedAt = completedAt,
                         weightKg = entry.weightKg,
                         perceivedEffort = entry.perceivedEffort,
+                        avgHeartRateBpm = entry.heartRate?.avgBpm,
+                        maxHeartRateBpm = entry.heartRate?.maxBpm,
                     ),
                 )
             }
@@ -323,6 +332,8 @@ class TrainingPlanRepository(
                     startedAt = startedAt,
                     completedAt = completedAt,
                     durationSeconds = Duration.between(startedAt, completedAt).seconds,
+                    avgHeartRateBpm = heartRate?.avgBpm,
+                    maxHeartRateBpm = heartRate?.maxBpm,
                 ),
             )
         }

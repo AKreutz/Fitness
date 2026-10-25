@@ -158,6 +158,8 @@ data class WorkoutSessionDto(
     val startedAt: Long,
     val completedAt: Long,
     val durationSeconds: Long,
+    val avgHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
     val updatedAt: Long,
 ) {
     fun toEntity(): WorkoutSession = WorkoutSession(
@@ -166,6 +168,8 @@ data class WorkoutSessionDto(
         startedAt = Instant.ofEpochMilli(startedAt),
         completedAt = Instant.ofEpochMilli(completedAt),
         durationSeconds = durationSeconds,
+        avgHeartRateBpm = avgHeartRateBpm,
+        maxHeartRateBpm = maxHeartRateBpm,
         updatedAt = Instant.ofEpochMilli(updatedAt),
     )
 
@@ -176,6 +180,8 @@ data class WorkoutSessionDto(
             startedAt = entity.startedAt.toEpochMilli(),
             completedAt = entity.completedAt.toEpochMilli(),
             durationSeconds = entity.durationSeconds,
+            avgHeartRateBpm = entity.avgHeartRateBpm,
+            maxHeartRateBpm = entity.maxHeartRateBpm,
             updatedAt = entity.updatedAt.toEpochMilli(),
         )
     }
@@ -188,6 +194,8 @@ data class ExercisePerformanceRecordDto(
     val completedAt: Long,
     val weightKg: Double,
     val perceivedEffort: String,
+    val avgHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
     val updatedAt: Long,
 ) {
     fun toEntity(): ExercisePerformanceRecord = ExercisePerformanceRecord(
@@ -196,6 +204,8 @@ data class ExercisePerformanceRecordDto(
         completedAt = Instant.ofEpochMilli(completedAt),
         weightKg = weightKg,
         perceivedEffort = PerceivedEffort.valueOf(perceivedEffort),
+        avgHeartRateBpm = avgHeartRateBpm,
+        maxHeartRateBpm = maxHeartRateBpm,
         updatedAt = Instant.ofEpochMilli(updatedAt),
     )
 
@@ -206,6 +216,8 @@ data class ExercisePerformanceRecordDto(
             completedAt = entity.completedAt.toEpochMilli(),
             weightKg = entity.weightKg,
             perceivedEffort = entity.perceivedEffort.name,
+            avgHeartRateBpm = entity.avgHeartRateBpm,
+            maxHeartRateBpm = entity.maxHeartRateBpm,
             updatedAt = entity.updatedAt.toEpochMilli(),
         )
     }

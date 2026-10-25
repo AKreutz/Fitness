@@ -20,32 +20,37 @@
 
 ## Garmin companion app (Forerunner 745)
 
-Connect IQ watch app (Monkey C) talking to the phone app through the Connect IQ Mobile SDK. The phone stays the source of truth.
+Connect IQ watch app (Monkey C) talking to the phone app through the Connect IQ Mobile SDK. The phone stays the source of truth: it runs the session and the watch shows it and sends commands. The message format is documented on `WatchProtocol` (`data/watch/WatchProtocol.kt`). The app records one weight and one effort rating per exercise, not per set, so the watch works at that level too.
+
+Phone app: done, untested against a real watch.
 
 - [x] Set up the Connect IQ project (`garmin/`, builds for fr745)
-- [ ] Phone-to-watch message channel (Connect IQ Mobile SDK, Garmin Connect Mobile required)
-- [ ] Define the compact message format: workout plan to the watch, logged sets back to the phone
+- [x] Phone-to-watch message channel (`GarminWatchConnection`, kept alive during a session by `WatchSyncService`)
+- [x] Message format: session state to the watch, commands and heart rate back (`WatchProtocol`, `WatchSessionBridge`)
 
 Phone-free set logging
 
-- [ ] Push the current workout plan to the watch (exercise, set number, target weight and reps)
-- [ ] Watch screen showing the current exercise and target, e.g. "Squat 80 kg x 8"
-- [ ] Log a set with one tap, with a way to adjust reps and weight first
-- [ ] Sync logged sets back to the phone and merge them into the active session
-- [ ] Start the rest timer when a set is logged and vibrate when it ends
+- [x] Phone: publish the session state (exercise, set, target weight and reps, rest goal) to the watch
+- [x] Phone: Advance (finish set / start next set) and Skip commands from the watch
+- [ ] Watch: screen showing the current exercise and target, e.g. "Squat 80 kg x 8"
+- [ ] Watch: one tap to finish a set or start the next one, send `adv`
+- [ ] Watch: rest timer from the state's `rt` / `rg`, vibrating when the goal is reached
 
 Effort capture
 
-- [ ] Rate each set (Easy / Medium / Hard) on the watch
-- [ ] Send the rating to the phone so it feeds the effort-based rep stepping and weight-increase offers
+- [x] Phone: `rate` command feeds the effort-based rep stepping, and `inc` answers the weight-increase offer
+- [ ] Watch: Easy / Medium / Hard prompt when the exercise's last set is done, send `rate`
+- [ ] Watch: weight-increase prompt ("Raise to X kg?") with `nw`, send `inc`
 
-Heart rate per set and session
+Heart rate per exercise and session
 
-- [ ] Record average and max heart rate per set and for the whole session
-- [ ] Record heart rate recovery between sets
-- [ ] Send heart rate data to the phone and show it in the session summary
+- [x] Phone: store the watch's average and max heart rate per exercise and per session (Room migration 15 to 16)
+- [x] Phone: include them in Drive sync and plan export
+- [x] Phone: show the session's heart rate in the finish screen and the Workouts history
+- [ ] Watch: measure heart rate per exercise and for the session, send `hr` regularly
+- [ ] Heart rate recovery between sets
 - [ ] Write the workout as a FIT strength activity so it appears in Garmin Connect
-- [ ] Include the new fields in Drive sync and plan export (Room migration + snapshot DTO)
+- [ ] Show per-exercise heart rate in the expanded Workouts history
 
 ## Animations
 

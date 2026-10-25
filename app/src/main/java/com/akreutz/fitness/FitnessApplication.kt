@@ -11,6 +11,7 @@ import com.akreutz.fitness.data.sync.LocalChangeTracker
 import com.akreutz.fitness.data.sync.SyncManager
 import com.akreutz.fitness.data.sync.auth.GoogleAuthManager
 import com.akreutz.fitness.data.sync.drive.GoogleDriveDataSource
+import com.akreutz.fitness.data.watch.WatchSessionBridge
 import com.akreutz.fitness.ui.session.RestTimerAlerter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +53,12 @@ class FitnessApplication : Application() {
     private val activePlanPreferences: ActivePlanPreferences by lazy {
         ActivePlanPreferences(this)
     }
+
+    /**
+     * Passes the open workout session to the watch and the watch's commands back (see
+     * `WatchSyncService`, which keeps the connection up while a session is open).
+     */
+    val watchSessionBridge = WatchSessionBridge()
 
     /** Tracks whether local data has changed since the last successful sync. */
     val localChangeTracker = LocalChangeTracker()

@@ -53,6 +53,7 @@ import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WorkoutSession
 import com.akreutz.fitness.data.model.WorkoutSessionWithWorkout
+import com.akreutz.fitness.data.model.heartRate
 import com.akreutz.fitness.data.model.performanceOn
 import com.akreutz.fitness.ui.common.ConfirmDestructiveDialog
 import com.akreutz.fitness.ui.theme.effortColors
@@ -338,8 +339,9 @@ private fun WorkoutSessionCard(
                         text = listOf(
                             startedAt.format(sessionTimeFormatter),
                             session.session.durationSeconds.formatDuration(),
+                            session.session.heartRate?.let { "${it.avgBpm} bpm avg" },
                             if (exerciseCount == 1) "1 exercise" else "$exerciseCount exercises",
-                        ).joinToString(" · "),
+                        ).filterNotNull().joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -75,6 +75,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -128,6 +129,7 @@ import com.akreutz.fitness.data.model.nearestLevelKg
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
 import com.akreutz.fitness.data.model.targetReps
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.data.watch.WatchSyncService
 import com.akreutz.fitness.ui.theme.OnPlateChrome1_25
 import com.akreutz.fitness.ui.theme.OnPlateWhite5
 import com.akreutz.fitness.ui.theme.PlateBlack2_5
@@ -161,7 +163,12 @@ fun WorkoutSessionScreen(
 ) {
     val application = LocalContext.current.applicationContext as FitnessApplication
     val viewModel: WorkoutSessionViewModel = viewModel(
-        factory = WorkoutSessionViewModelFactory(repository, workoutId, application.restTimerAlerter),
+        factory = WorkoutSessionViewModelFactory(
+            repository,
+            workoutId,
+            application.restTimerAlerter,
+            application.watchSessionBridge,
+        ),
     )
     val uiState by viewModel.uiState.collectAsState()
     val weightStacks by repository.observeWeightStacks().collectAsState(initial = emptyList())
@@ -175,6 +182,14 @@ fun WorkoutSessionScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    // Keeps the watch connection up for as long as this screen is open.
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        application.watchSessionBridge.sessionActive.value = true
+        WatchSyncService.start(context)
+        onDispose { application.watchSessionBridge.sessionActive.value = false }
     }
 
     // Matches Home's top bar: same TopAppBar, titled with the workout's name once known.
@@ -192,6 +207,7 @@ fun WorkoutSessionScreen(
                 UnavailableContent(onCancel, Modifier.padding(innerPadding))
             is WorkoutSessionUiState.Finished -> WorkoutCompleteContent(
                 personalRecords = state.personalRecords,
+                heartRate = state.heartRate,
                 onDone = onFinish,
                 modifier = Modifier.padding(innerPadding),
             )

@@ -41,6 +41,8 @@ data class PlanExportSessionDto(
     val startedAt: Long,
     val completedAt: Long,
     val durationSeconds: Long,
+    val avgHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
 )
 
 @Serializable
@@ -48,6 +50,8 @@ data class PlanExportPerformanceDto(
     val completedAt: Long,
     val weightKg: Double,
     val perceivedEffort: String,
+    val avgHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
 )
 
 @Serializable
@@ -102,6 +106,8 @@ object PlanExportCodec {
                                     startedAt = it.startedAt.toEpochMilli(),
                                     completedAt = it.completedAt.toEpochMilli(),
                                     durationSeconds = it.durationSeconds,
+                                    avgHeartRateBpm = it.avgHeartRateBpm,
+                                    maxHeartRateBpm = it.maxHeartRateBpm,
                                 )
                             },
                         exercises = workoutWithExercises.exercises
@@ -127,6 +133,8 @@ object PlanExportCodec {
                                                 completedAt = it.completedAt.toEpochMilli(),
                                                 weightKg = it.weightKg,
                                                 perceivedEffort = it.perceivedEffort.name,
+                                                avgHeartRateBpm = it.avgHeartRateBpm,
+                                                maxHeartRateBpm = it.maxHeartRateBpm,
                                             )
                                         },
                                 )

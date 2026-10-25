@@ -5,12 +5,18 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.akreutz.fitness.data.model.ExercisePerformanceEntry
+import com.akreutz.fitness.data.model.HeartRateStats
 import com.akreutz.fitness.data.model.ExerciseType
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
+import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.isAtTopRepStep
+import com.akreutz.fitness.data.model.suggestedIncreasedWeightKg
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
+import com.akreutz.fitness.data.watch.WatchCommand
+import com.akreutz.fitness.data.watch.WatchProtocol
+import com.akreutz.fitness.data.watch.WatchSessionBridge
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -18,7 +24,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -73,9 +81,10 @@ sealed interface WorkoutSessionUiState {
 
     /**
      * The user has gone through every exercise and the session is done. [personalRecords] is how
-     * many of its exercises were done at a heavier weight than ever before.
+     * many of its exercises were done at a heavier weight than ever before. [heartRate] is the
+     * session's heart rate as measured by the watch, if there was one.
      */
-    data class Finished(val personalRecords: Int) : WorkoutSessionUiState
+    data class Finished(val personalRecords: Int, val heartRate: HeartRateStats? = null) : WorkoutSessionUiState
 }
 
 /** Describes the set currently shown on an [WorkoutSessionUiState.InProgress] card. */
@@ -127,11 +136,16 @@ private const val RECOVERY_TICK_MILLIS = 1_000L
  * answered), persists all of the session's ratings under today's date and finishes the session.
  * When a rest period reaches its exercise's prescribed rest duration, [restTimerAlerter] is fired
  * once (not on every later tick) to notify the user that rest is over.
+ *
+ * The session can also be run from the watch: its state is published to [watchBridge] (see
+ * [WatchProtocol]) and the commands the watch sends back do the same as the buttons on screen. The
+ * heart rate the watch measures is stored with the exercise ratings.
  */
 class WorkoutSessionViewModel(
     private val repository: TrainingPlanRepository,
     private val workoutId: String,
     private val restTimerAlerter: RestTimerAlerter,
+    private val watchBridge: WatchSessionBridge,
 ) : ViewModel() {
 
     /** When this session began, for computing its duration once it finishes. */
@@ -164,6 +178,17 @@ class WorkoutSessionViewModel(
 
     /** How many exercises were done at a new heaviest weight; set just before [readyToFinish]. */
     private var personalRecords = 0
+
+    /** The latest heart rate the watch reported for each exercise, by exercise id. */
+    private val exerciseHeartRates = mutableMapOf<String, HeartRateStats>()
+
+    /** The latest heart rate the watch reported for the whole session so far. */
+    private var sessionHeartRate: HeartRateStats? = null
+
+    /** When the current rest began, in epoch seconds, for the watch's own rest timer. */
+    private var restStartedAtEpochSeconds: Long? = null
+
+    private var latestWeightStacks: List<WeightStack> = emptyList()
 
     /** Whether every exercise has been rated and the session is ready to finish. */
     private val readyToFinish = MutableStateFlow(false)
@@ -226,7 +251,7 @@ class WorkoutSessionViewModel(
             val exercises = workout?.exercises
             when {
                 exercises.isNullOrEmpty() -> WorkoutSessionUiState.Unavailable
-                progress.readyToFinish -> WorkoutSessionUiState.Finished(personalRecords)
+                progress.readyToFinish -> WorkoutSessionUiState.Finished(personalRecords, sessionHeartRate)
                 progress.exerciseIndex >= exercises.size -> WorkoutSessionUiState.Unavailable
                 else -> {
                     val exercise = exercises[progress.exerciseIndex]
@@ -257,6 +282,49 @@ class WorkoutSessionViewModel(
 
     init {
         workout.onEach { latestExercises = it?.exercises }.launchIn(viewModelScope)
+        repository.observeWeightStacks().onEach { latestWeightStacks = it }.launchIn(viewModelScope)
+
+        // Only changes to what the watch shows are passed on, so the rest timer's ticks are not.
+        uiState
+            .map { state ->
+                val offered = (state as? WorkoutSessionUiState.InProgress)?.exerciseToOfferWeightIncrease
+                WatchProtocol.encodeState(
+                    state,
+                    restStartedAtEpochSeconds,
+                    offered?.suggestedIncreasedWeightKg(latestWeightStacks),
+                )
+            }
+            .distinctUntilChanged()
+            .onEach(watchBridge::publishState)
+            .launchIn(viewModelScope)
+        watchBridge.commands.onEach(::handleWatchCommand).launchIn(viewModelScope)
+    }
+
+    /** Does what the watch asked for, as long as it still makes sense where the session is now. */
+    private fun handleWatchCommand(command: WatchCommand) {
+        val inProgress = uiState.value as? WorkoutSessionUiState.InProgress
+        when (command) {
+            WatchCommand.Advance -> {
+                if (inProgress != null && inProgress.exerciseToRate == null &&
+                    inProgress.exerciseToOfferWeightIncrease == null
+                ) {
+                    advance()
+                }
+            }
+            WatchCommand.Skip -> if (inProgress != null) skipExercise()
+            is WatchCommand.Rate -> rateExercise(command.effort)
+            is WatchCommand.RespondToWeightIncrease -> {
+                val offered = inProgress?.exerciseToOfferWeightIncrease ?: return
+                respondToWeightIncreaseOffer(
+                    if (command.accept) offered.suggestedIncreasedWeightKg(latestWeightStacks) else null,
+                )
+            }
+            is WatchCommand.HeartRate -> {
+                exerciseHeartRates[command.exerciseId] = command.exercise
+                sessionHeartRate = command.session
+            }
+            WatchCommand.Sync -> Unit
+        }
     }
 
     private fun ExerciseStep.toSetProgress(totalSets: Int, isResting: Boolean): SetProgress {
@@ -352,6 +420,7 @@ class WorkoutSessionViewModel(
         collectedRatings[rated.exercise.id] = ExercisePerformanceEntry(
             weightKg = rated.exercise.weightKg,
             perceivedEffort = effort,
+            heartRate = exerciseHeartRates[rated.exercise.id],
         )
         exerciseToRate.value = null
 
@@ -401,7 +470,7 @@ class WorkoutSessionViewModel(
                     val previous = latestExercises?.firstOrNull { it.exercise.id == exerciseId }?.records
                     !previous.isNullOrEmpty() && entry.weightKg > previous.maxOf { it.weightKg }
                 }
-                repository.recordPerceivedEfforts(workoutId, collectedRatings, startedAt)
+                repository.recordPerceivedEfforts(workoutId, collectedRatings, startedAt, sessionHeartRate)
                 readyToFinish.value = true
             }
         } else {
@@ -416,6 +485,7 @@ class WorkoutSessionViewModel(
     }
 
     private fun startRecoveryTimer() {
+        restStartedAtEpochSeconds = Instant.now().epochSecond
         resting.value = true
         recoverySeconds.value = 0
         val goalSeconds = latestExercises?.getOrNull(exerciseIndex.value)?.exercise?.restSeconds
@@ -434,6 +504,7 @@ class WorkoutSessionViewModel(
     }
 
     private fun stopRecoveryTimer() {
+        restStartedAtEpochSeconds = null
         recoveryJob?.cancel()
         recoveryJob = null
         resting.value = false
@@ -441,6 +512,7 @@ class WorkoutSessionViewModel(
     }
 
     override fun onCleared() {
+        watchBridge.publishState(null)
         recoveryJob?.cancel()
     }
 }
@@ -449,10 +521,11 @@ class WorkoutSessionViewModelFactory(
     private val repository: TrainingPlanRepository,
     private val workoutId: String,
     private val restTimerAlerter: RestTimerAlerter,
+    private val watchBridge: WatchSessionBridge,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         require(modelClass.isAssignableFrom(WorkoutSessionViewModel::class.java))
-        return WorkoutSessionViewModel(repository, workoutId, restTimerAlerter) as T
+        return WorkoutSessionViewModel(repository, workoutId, restTimerAlerter, watchBridge) as T
     }
 }
