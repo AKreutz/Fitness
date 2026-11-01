@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +53,8 @@ import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.WeightStack
 import com.akreutz.fitness.data.model.WorkoutWithExercises
 import com.akreutz.fitness.data.model.lastPerformanceAtCurrentWeight
+import com.akreutz.fitness.data.model.lastRepsDone
+import com.akreutz.fitness.data.model.repsDoneAt
 import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.staggeredEntrance
 import com.akreutz.fitness.ui.profile.toDraft
@@ -354,7 +355,8 @@ private fun ExerciseDetailsSheet(
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                text = String.format(Locale.US, "%.1f kg", entry.weightKg),
+                                text = String.format(Locale.US, "%.1f kg", entry.weightKg) +
+                                    (exercise.repsDoneAt(completedAt)?.let { " × $it" } ?: ""),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                             )
@@ -476,8 +478,8 @@ private fun ExerciseCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
@@ -488,7 +490,13 @@ private fun ExerciseCard(
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = exercise.lastRepsDone?.let { "× $it reps" } ?: " ",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                     val effortLevel = exercise.lastPerformanceAtCurrentWeight?.perceivedEffort
                     PerceivedEffortBar(
                         effortLevel = effortLevel,

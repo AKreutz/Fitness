@@ -62,6 +62,29 @@ val ExerciseWithPerformanceHistory.effortsAtCurrentWeight: List<PerceivedEffort>
         .map { it.value.perceivedEffort }
         .reversed()
 
+/**
+ * The reps per set done in the performance that completed at [completedAt], or `null` if there is
+ * none. Reps aren't stored, so this replays the rep target that session had: the efforts rated in
+ * the unbroken run of earlier performances at the same weight (see [RepScheme.targetReps]).
+ * Reflects the exercise's current rep scheme.
+ */
+fun ExerciseWithPerformanceHistory.repsDoneAt(completedAt: Instant): Int? {
+    val weightKg = performanceHistory[completedAt]?.weightKg ?: return null
+    val earlierEfforts = performanceHistory.entries
+        .filter { it.key < completedAt }
+        .sortedByDescending { it.key }
+        .takeWhile { it.value.weightKg == weightKg }
+        .map { it.value.perceivedEffort }
+        .reversed()
+    return RepScheme.targetReps(exercise.reps, earlierEfforts)
+}
+
+/** The reps per set done in the most recent performance at the current weight, if any. */
+val ExerciseWithPerformanceHistory.lastRepsDone: Int?
+    get() = performanceHistory.keys.maxOrNull()
+        ?.takeIf { lastPerformanceAtCurrentWeight != null }
+        ?.let { repsDoneAt(it) }
+
 /** The rep target for the next session of this exercise (see [RepScheme.targetReps]). */
 val ExerciseWithPerformanceHistory.targetReps: Int
     get() = RepScheme.targetReps(exercise.reps, effortsAtCurrentWeight)
