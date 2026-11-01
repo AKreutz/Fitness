@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefile
+
+# Garmin Connect IQ SDK: its classes are parcelled in broadcasts from the Garmin Connect app and
+# looked up by their original name (e.g. IQDevice), so R8 must not rename or strip them.
+-keep class com.garmin.android.connectiq.** { *; }
+-keep interface com.garmin.android.connectiq.** { *; }
+-dontwarn com.garmin.android.connectiq.**
