@@ -25,3 +25,18 @@
 -keep class com.garmin.android.connectiq.** { *; }
 -keep interface com.garmin.android.connectiq.** { *; }
 -dontwarn com.garmin.android.connectiq.**
+
+# Google API client (Drive sync): JSON (de)serialization reflects over fields annotated with @Key
+# and instantiates model classes (e.g. File, FileList) by reflection, so R8 must keep them with
+# their members and no-arg constructors. Without this, every sync fails with "key error".
+-keepattributes Signature,RuntimeVisibleAnnotations,AnnotationDefault,EnclosingMethod,InnerClasses
+-keep class com.google.api.client.** { *; }
+-keep class com.google.api.services.drive.** { *; }
+-keepclassmembers class * {
+    @com.google.api.client.util.Key <fields>;
+    @com.google.api.client.util.Value <fields>;
+}
+-dontwarn com.google.api.client.**
+-dontwarn com.google.api.services.drive.**
+-dontwarn org.apache.http.**
+-dontwarn javax.annotation.**

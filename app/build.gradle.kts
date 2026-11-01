@@ -81,8 +81,12 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // R8 is off on purpose: it twice broke reflection-based libraries in release builds only
+            // (Garmin Connect IQ, Google API client / Drive sync) in ways debug builds never showed.
+            // The proguard-rules.pro keep rules are retained so it can be re-enabled safely later,
+            // but only after testing a release APK (sync, workout, Garmin).
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (hasReleaseSigningConfig) {
                 signingConfig = signingConfigs.getByName("release")
