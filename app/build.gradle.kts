@@ -27,8 +27,8 @@ android {
         applicationId = "com.akreutz.fitness"
         minSdk = 24
         targetSdk = 37
-        versionCode = 15
-        versionName = "1.13"
+        versionCode = 16
+        versionName = "1.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
