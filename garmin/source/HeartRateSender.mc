@@ -7,8 +7,8 @@ import Toybox.System;
 class HeartRateSender {
     private const READINGS_PER_NUMBER = 3;
     private const NUMBERS_PER_PIECE = 64;
-    // How often a piece is tried before the transfer waits, and how long it waits before starting over; and how often
-    // it starts over before giving up.
+    // How often a piece is tried before the transfer waits, and how long it waits before trying it again; and how often
+    // it waits that long before giving up.
     private const MAX_ATTEMPTS = 3;
     private const RETRY_MILLIS = 5000;
     private const RESTART_MILLIS = 30000;
@@ -74,17 +74,18 @@ class HeartRateSender {
         sendNext();
     }
 
-    // The piece that was sent did not get through. It is sent again a little later, a few times, and then the whole
-    // transfer starts over once or twice more before it gives up.
+    // The piece that was sent did not get through. It is sent again a little later, a few times, and then, after a
+    // longer wait, a few more times (twice over) before the transfer gives up. Pieces that already got through are
+    // not sent again.
     function onFailed() as Void {
         mInFlight = false;
         mAttempts++;
         if (mAttempts < MAX_ATTEMPTS) {
             mWaitUntil = System.getTimer() + RETRY_MILLIS;
         } else if (mRestarts < MAX_RESTARTS) {
+            // Carries on from the piece that failed: the phone keeps the pieces it already has.
             mRestarts++;
             mAttempts = 0;
-            mNext = 0;
             mWaitUntil = System.getTimer() + RESTART_MILLIS;
         } else {
             mActive = false;

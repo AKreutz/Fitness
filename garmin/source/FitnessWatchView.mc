@@ -1,5 +1,6 @@
 import Toybox.Graphics;
 import Toybox.Lang;
+import Toybox.UserProfile;
 import Toybox.WatchUi;
 
 // Shows where the workout is, one screen per phase. Sized for the Forerunner 745's round 240x240 screen, so text sits
@@ -170,13 +171,44 @@ class FitnessWatchView extends WatchUi.View {
         dc.drawText(w / 2, y, Graphics.FONT_XTINY, hint, CENTER);
     }
 
+    // The current heart rate: a large number colored by heart rate zone, with a small "bpm" beside it, centered as one.
     private function drawHeartRate(dc as Graphics.Dc, w as Number, h as Number) as Void {
         var bpm = mTracker.currentBpm;
         if (bpm == null || bpm <= 0) {
             return;
         }
-        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(w / 2, h * 0.9, Graphics.FONT_XTINY, bpm + " " + text(Rez.Strings.HeartRate), CENTER);
+        var number = bpm.toString();
+        var unit = text(Rez.Strings.HeartRate);
+        var gap = 4;
+        var numberWidth = dc.getTextWidthInPixels(number, Graphics.FONT_MEDIUM);
+        var unitWidth = dc.getTextWidthInPixels(unit, Graphics.FONT_XTINY);
+        var left = (w - (numberWidth + gap + unitWidth)) / 2;
+        var y = h * 0.885;
+        var leftMiddle = Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER;
+        dc.setColor(heartRateColor(bpm), Graphics.COLOR_TRANSPARENT);
+        dc.drawText(left, y, Graphics.FONT_MEDIUM, number, leftMiddle);
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(left + numberWidth + gap, y + h * 0.02, Graphics.FONT_XTINY, unit, leftMiddle);
+    }
+
+    // The color for a heart rate by the wearer's own heart rate zones: gray below zone 1, then blue, green, yellow,
+    // orange and red for zones 1 to 5. Zone limits come from the watch's profile, or a typical 190 bpm maximum if the
+    // watch has none.
+    private function heartRateColor(bpm as Number) as Number {
+        var colors = [Graphics.COLOR_LT_GRAY, Graphics.COLOR_BLUE, Graphics.COLOR_GREEN, Graphics.COLOR_YELLOW,
+            Graphics.COLOR_ORANGE, Graphics.COLOR_RED];
+        var zones = [95, 114, 133, 152, 171, 190] as Array<Number>;
+        var profileZones = UserProfile.getHeartRateZones(UserProfile.HR_ZONE_SPORT_GENERIC);
+        if (profileZones != null && profileZones.size() >= zones.size()) {
+            zones = profileZones;
+        }
+        // zones[0] is the floor of zone 1 and each later entry the top of the zone before it, so the zone is the
+        // number of limits at or below the reading (0 below the floor, 5 at or above zone 5's top).
+        var zone = 0;
+        for (var i = 0; i < zones.size() && bpm >= zones[i]; i++) {
+            zone = i + 1;
+        }
+        return colors[zone < colors.size() ? zone : colors.size() - 1];
     }
 
     // One answer of a list, with the chosen one on a filled background.

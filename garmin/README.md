@@ -32,13 +32,13 @@ sent during the workout, so the link stays free for the phone's answers.
 
 When the last exercise is rated, the phone does not save the workout yet. Both screens say "Finishing…" while the watch
 sends all the readings, in pieces, one at a time. The phone saves the workout with them once they are all there, and
-works out the average and highest heart rate of the session and of each exercise from them. If nothing arrives for 20
+works out the average and highest heart rate of the session and of each exercise from them. If nothing arrives for 90
 seconds, or you tap "Save without heart rate" on the phone, it saves the workout without them. The phone only waits
 when a watch is connected and its app has been in touch during the workout.
 
 Stay on the "Finishing…" screen until it says "Workout done": leaving the watch app first loses the readings, because
-they are only kept in memory. A failed piece is sent again a few times, and the whole transfer starts over twice more
-before the watch gives up ("Heart rate not saved").
+they are only kept in memory. A failed piece is sent again a few times, and after a 30 second wait the transfer carries
+on from that piece, up to twice more, before the watch gives up ("Heart rate not saved").
 
 ## Garmin activity
 
