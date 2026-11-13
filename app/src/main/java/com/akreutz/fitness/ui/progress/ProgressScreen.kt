@@ -67,7 +67,7 @@ private val axisDateFormatter: DateTimeFormatter
     get() = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)
 
 /**
- * Shows a separate weight-over-time chart for each exercise in the user's active training plan,
+ * Shows a separate volume-over-time chart (weight × reps × sets) for each exercise in the user's active training plan,
  * grouped under its workout, in plan order. Exercises with fewer than two logged data points
  * (nothing to draw a line between) show a placeholder message instead of an empty chart.
  */
@@ -210,7 +210,7 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
                 if (latest != null && first != null) {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "${latest.weightKg.formatDecimal()} kg",
+                            text = "${latest.volumeKg.formatDecimal()} kg",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
@@ -221,8 +221,8 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            val diff = latest.weightKg - first.weightKg
-                            val percent = if (first.weightKg > 0.0) diff / first.weightKg * 100.0 else 0.0
+                            val diff = latest.volumeKg - first.volumeKg
+                            val percent = if (first.volumeKg > 0.0) diff / first.volumeKg * 100.0 else 0.0
                             Text(
                                 text = "${diff.formatSigned()} kg · ${percent.formatSigned()}%",
                                 style = MaterialTheme.typography.labelMedium,
@@ -252,7 +252,7 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
                     )
                 }
             } else {
-                WeightLineChart(
+                VolumeLineChart(
                     dataPoints = exercise.dataPoints,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -316,7 +316,7 @@ private fun SummaryProgressCard(summary: List<SummaryDataPoint>, modifier: Modif
                 }
             }
             Text(
-                text = "Summed weight increase across all exercises",
+                text = "Summed volume increase across all exercises",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -385,6 +385,27 @@ internal fun WeightLineChart(dataPoints: List<WeightDataPoint>, modifier: Modifi
             LineChartPoint(
                 completedAt = it.completedAt,
                 value = it.weightKg,
+                pointColor = effortColors.forEffort(it.perceivedEffort),
+                fillColor = effortColors.forEffort(it.perceivedEffort),
+            )
+        },
+        formatValueLabel = { it.formatDecimal() },
+        modifier = modifier,
+    )
+}
+
+/**
+ * Like [WeightLineChart], but plotting each [VolumeDataPoint]'s volume (weight × reps × sets, in kg)
+ * instead of the weight alone, so adding reps at the same weight shows as progress too.
+ */
+@Composable
+private fun VolumeLineChart(dataPoints: List<VolumeDataPoint>, modifier: Modifier = Modifier) {
+    val effortColors = MaterialTheme.effortColors
+    LineChart(
+        points = dataPoints.map {
+            LineChartPoint(
+                completedAt = it.completedAt,
+                value = it.volumeKg,
                 pointColor = effortColors.forEffort(it.perceivedEffort),
                 fillColor = effortColors.forEffort(it.perceivedEffort),
             )

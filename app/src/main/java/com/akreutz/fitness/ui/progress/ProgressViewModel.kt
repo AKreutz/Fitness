@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.akreutz.fitness.data.model.ExerciseWithPerformanceHistory
 import com.akreutz.fitness.data.model.PerceivedEffort
 import com.akreutz.fitness.data.model.TrainingPlanWithWorkouts
+import com.akreutz.fitness.data.model.repsDoneAt
 import com.akreutz.fitness.data.repository.TrainingPlanRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +26,17 @@ data class WeightDataPoint(
 data class ExerciseProgress(
     val exerciseId: String,
     val exerciseName: String,
-    val dataPoints: List<WeightDataPoint>,
+    val dataPoints: List<VolumeDataPoint>,
+)
+
+/**
+ * One performance's training volume: weight × reps per set × number of sets, at the point in time
+ * it was logged.
+ */
+data class VolumeDataPoint(
+    val completedAt: Instant,
+    val volumeKg: Double,
+    val perceivedEffort: PerceivedEffort,
 )
 
 /** One workout's exercises, each with its own chartable history. */
@@ -95,12 +106,21 @@ class ProgressViewModel(repository: TrainingPlanRepository) : ViewModel() {
         ExerciseProgress(
             exerciseId = exercise.id,
             exerciseName = exercise.name,
-            dataPoints = performanceHistory.entries
-                .sortedBy { it.key }
-                .map { (completedAt, entry) ->
-                    WeightDataPoint(completedAt, entry.weightKg, entry.perceivedEffort)
-                },
+            dataPoints = volumeHistory(),
         )
+
+    /**
+     * Each performance's volume (weight × reps per set × sets), in chronological order. Reps aren't
+     * stored, so they're replayed per session (see [repsDoneAt]); the set count is the exercise's
+     * current one.
+     */
+    private fun ExerciseWithPerformanceHistory.volumeHistory(): List<VolumeDataPoint> =
+        performanceHistory.entries
+            .sortedBy { it.key }
+            .map { (completedAt, entry) ->
+                val reps = repsDoneAt(completedAt) ?: 0
+                VolumeDataPoint(completedAt, entry.weightKg * reps * exercise.sets, entry.perceivedEffort)
+            }
 
     /**
      * For every session timestamp any of [this] was performed at, the sum across those exercises
@@ -114,12 +134,12 @@ class ProgressViewModel(repository: TrainingPlanRepository) : ViewModel() {
 
         val entriesByTimestamp = mutableMapOf<Instant, MutableList<SessionEntry>>()
         forEach { exercise ->
-            val startingWeight = exercise.performanceHistory.entries
-                .minByOrNull { it.key }?.value?.weightKg?.takeIf { it > 0.0 } ?: return@forEach
-            exercise.performanceHistory.forEach { (completedAt, entry) ->
-                val percentIncrease = (entry.weightKg - startingWeight) / startingWeight * 100.0
-                entriesByTimestamp.getOrPut(completedAt) { mutableListOf() } +=
-                    SessionEntry(percentIncrease, entry.perceivedEffort)
+            val history = exercise.volumeHistory()
+            val startingVolume = history.firstOrNull()?.volumeKg?.takeIf { it > 0.0 } ?: return@forEach
+            history.forEach { point ->
+                val percentIncrease = (point.volumeKg - startingVolume) / startingVolume * 100.0
+                entriesByTimestamp.getOrPut(point.completedAt) { mutableListOf() } +=
+                    SessionEntry(percentIncrease, point.perceivedEffort)
             }
         }
         return entriesByTimestamp.entries
