@@ -255,9 +255,28 @@ class WorkoutSessionViewModel(
      */
     private val sessionOrder = MutableStateFlow<List<String>>(emptyList())
 
+    /**
+     * Weights the user switched to during this session (see [changeWeight]), by exercise id. They
+     * replace the plan's weight for the rest of the session, so everything that reads an exercise's
+     * weight (what's shown, the rep target, what gets recorded) follows them.
+     */
+    private val weightOverrides = MutableStateFlow<Map<String, Double>>(emptyMap())
+
+    /**
+     * Ids of exercises whose [weightOverrides] entry is for this session only, so the plan still
+     * has its old weight. No weight increase is offered for these, since it would build on a weight
+     * the plan doesn't use.
+     */
+    private val sessionOnlyWeightIds = mutableSetOf<String>()
+
     private val workout: Flow<WorkoutWithExercises?> =
-        combine(repository.observeWorkout(workoutId), sessionOrder) { workout, order ->
-            workout?.copy(exercises = workout.exercises.inSessionOrder(order))
+        combine(repository.observeWorkout(workoutId), sessionOrder, weightOverrides) { workout, order, overrides ->
+            workout?.copy(
+                exercises = workout.exercises.inSessionOrder(order).map { item ->
+                    val weightKg = overrides[item.exercise.id]
+                    if (weightKg == null) item else item.copy(exercise = item.exercise.copy(weightKg = weightKg))
+                },
+            )
         }
 
     private fun List<ExerciseWithPerformanceHistory>.inSessionOrder(
@@ -501,7 +520,7 @@ class WorkoutSessionViewModel(
         )
         exerciseToRate.value = null
 
-        if (effort == PerceivedEffort.EASY && rated.isAtTopRepStep) {
+        if (effort == PerceivedEffort.EASY && rated.isAtTopRepStep && rated.exercise.id !in sessionOnlyWeightIds) {
             exerciseToOfferWeightIncrease.value = rated
         } else {
             proceedAfterRating()
@@ -522,10 +541,36 @@ class WorkoutSessionViewModel(
         if (newWeightKg != null) {
             viewModelScope.launch {
                 repository.setExerciseWeight(exercise.exercise.id, newWeightKg)
+                // The plan has the weight now, so a weight switched to earlier must not cover it up.
+                weightOverrides.value -= exercise.exercise.id
                 proceedAfterRating()
             }
         } else {
             proceedAfterRating()
+        }
+    }
+
+    /**
+     * Switches the current exercise to [newWeightKg] for the rest of the session, e.g. after
+     * finding the planned weight too heavy. The weight recorded for the exercise is this one, for
+     * all its sets, including any already done at the old weight. If [keepForNextTime] is true, it
+     * also becomes the exercise's prescribed weight (see [TrainingPlanRepository.setExerciseWeight]);
+     * otherwise the plan keeps its weight. Ignored during warm-up, which has no weight, and while a
+     * rating or weight-increase prompt is pending.
+     */
+    fun changeWeight(newWeightKg: Double, keepForNextTime: Boolean) {
+        val inProgress = uiState.value as? WorkoutSessionUiState.InProgress ?: return
+        if (inProgress.currentSet is SetProgress.WarmUp) return
+        if (inProgress.exerciseToRate != null || inProgress.exerciseToOfferWeightIncrease != null) return
+        val exerciseId = inProgress.exercise.exercise.id
+        if (keepForNextTime) {
+            sessionOnlyWeightIds -= exerciseId
+        } else {
+            sessionOnlyWeightIds += exerciseId
+        }
+        weightOverrides.value += exerciseId to newWeightKg
+        if (keepForNextTime) {
+            viewModelScope.launch { repository.setExerciseWeight(exerciseId, newWeightKg) }
         }
     }
 

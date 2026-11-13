@@ -223,6 +223,7 @@ fun WorkoutSessionScreen(
                 onSkip = viewModel::skipExercise,
                 onRate = viewModel::rateExercise,
                 onRespondToWeightIncreaseOffer = viewModel::respondToWeightIncreaseOffer,
+                onChangeWeight = viewModel::changeWeight,
                 onCancel = onCancel,
                 modifier = Modifier.padding(innerPadding),
             )
@@ -314,12 +315,14 @@ private fun InProgressContent(
     onSkip: () -> Unit,
     onRate: (PerceivedEffort) -> Unit,
     onRespondToWeightIncreaseOffer: (Double?) -> Unit,
+    onChangeWeight: (weightKg: Double, keepForNextTime: Boolean) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var cancelConfirmationShown by remember { mutableStateOf(false) }
     var switchPickerShown by remember { mutableStateOf(false) }
     var skipConfirmationShown by remember { mutableStateOf(false) }
+    var changeWeightShown by remember { mutableStateOf(false) }
 
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -350,7 +353,11 @@ private fun InProgressContent(
                 },
                 label = "exercise",
             ) { exerciseState ->
-                ExerciseContent(state = exerciseState, weightStacks = weightStacks)
+                ExerciseContent(
+                    state = exerciseState,
+                    weightStacks = weightStacks,
+                    onChangeWeight = { changeWeightShown = true },
+                )
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -451,6 +458,18 @@ private fun InProgressContent(
         )
     }
 
+    if (changeWeightShown) {
+        ChangeWeightDialog(
+            exercise = state.exercise,
+            weightStacks = weightStacks,
+            onUse = { weightKg, keepForNextTime ->
+                changeWeightShown = false
+                onChangeWeight(weightKg, keepForNextTime)
+            },
+            onDismiss = { changeWeightShown = false },
+        )
+    }
+
     if (switchPickerShown) {
         SwitchExerciseDialog(
             exercises = state.remainingExercises,
@@ -504,6 +523,7 @@ private data class RecoveryInfo(val seconds: Int, val goalSeconds: Int, val next
 private fun ExerciseContent(
     state: WorkoutSessionUiState.InProgress,
     weightStacks: List<WeightStack>,
+    onChangeWeight: () -> Unit,
 ) {
     val setProgress = state.currentSet
     val resting = setProgress as? SetProgress.Resting
@@ -538,6 +558,7 @@ private fun ExerciseContent(
                 exercise = state.exercise,
                 isWarmUp = isWarmUp,
                 weightStacks = weightStacks,
+                onChangeWeight = onChangeWeight,
                 modifier = Modifier.padding(top = 12.dp),
             )
         }
@@ -1203,6 +1224,134 @@ private fun WeightIncreaseOfferDialog(
     )
 }
 
+/**
+ * Dialog for switching the exercise to another weight mid-exercise, e.g. after finding the planned
+ * one too heavy. Like [WeightIncreaseOfferDialog] it has preset chips (offsets from the current
+ * weight for free weights, nearby stack levels for cable) and a stepper, but allows lighter weights
+ * too. It asks whether the new weight is only for this session ([onUse] with `false`) or also the
+ * exercise's weight from now on (`true`); the plan keeps its weight in the first case.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChangeWeightDialog(
+    exercise: ExerciseWithPerformanceHistory,
+    weightStacks: List<WeightStack>,
+    onUse: (weightKg: Double, keepForNextTime: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val current = exercise.exercise.weightKg
+    val isCable = exercise.exercise.type == ExerciseType.CABLE
+    val stack = weightStacks.firstOrNull { it.id == exercise.exercise.weightStackId }
+    val levels = if (isCable && stack != null) stack.levelsKg.sorted() else emptyList()
+    val stackChips = levels.filter { it < current }.takeLast(4) + levels.filter { it > current }.take(2)
+    val increment = exercise.exercise.weightIncrementKg.takeIf { it > 0 } ?: 2.5
+    val stepKg = if (isCable) 2.5 else increment / 2
+    val offsets = listOf(-increment * 2, -increment, -increment / 2, increment / 2, increment)
+    var newWeight by remember { mutableStateOf(current) }
+    var weightText by remember { mutableStateOf(formatKg(current)) }
+    var lbMode by remember { mutableStateOf(false) }
+    val roundKg: (Double) -> Double = when {
+        isCable -> { kg -> nearestLevelKg(kg, levels) }
+        else -> PlateBreakdown::nearestLoadable
+    }
+    val textValid = weightText.replace(',', '.').toDoubleOrNull() != null
+    fun setWeight(weight: Double) {
+        newWeight = weight.coerceAtLeast(0.0)
+        weightText = formatKg(newWeight)
+    }
+    val canUse = textValid && newWeight > 0 && newWeight != current
+
+    val numberStyle = MaterialTheme.typography.displaySmall.copy(
+        color = MaterialTheme.colorScheme.onSurface,
+        fontWeight = FontWeight.SemiBold,
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.dialogEnter(),
+        title = { Text("Change weight") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    "${exercise.exercise.name} is planned at ${formatKg(current)} kg. The new weight is " +
+                        "recorded for the whole exercise, including sets already done.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (stackChips.isEmpty()) {
+                        FilledTonalIconButton(onClick = { setWeight(newWeight - stepKg) }) {
+                            Icon(Icons.Filled.Remove, contentDescription = "Decrease by ${formatKg(stepKg)} kg")
+                        }
+                    }
+                    WeightField(
+                        kgText = weightText,
+                        onKgTextChange = { text ->
+                            weightText = text
+                            text.replace(',', '.').toDoubleOrNull()?.let { newWeight = it }
+                        },
+                        lbMode = lbMode,
+                        onLbModeChange = { lbMode = it },
+                        roundKg = roundKg,
+                        style = numberStyle,
+                        unitBottomPadding = 6.dp,
+                    )
+                    if (stackChips.isEmpty()) {
+                        FilledTonalIconButton(onClick = { setWeight(newWeight + stepKg) }) {
+                            Icon(Icons.Filled.Add, contentDescription = "Increase by ${formatKg(stepKg)} kg")
+                        }
+                    }
+                }
+                val options = when {
+                    stackChips.isNotEmpty() -> stackChips.map { it to "${formatKg(it)} kg" }
+                    isCable -> emptyList()
+                    else -> offsets.map { (current + it) to "${if (it > 0) "+" else "−"}${formatKg(kotlin.math.abs(it))} kg" }
+                }.filter { it.first > 0 }
+                if (options.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    ) {
+                        options.forEach { (weight, label) ->
+                            FilterChip(
+                                selected = newWeight == weight,
+                                onClick = { setWeight(weight) },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                },
+                                modifier = Modifier.width(85.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Button(onClick = { onUse(newWeight, true) }, enabled = canUse) {
+                    Text("Use ${formatKg(newWeight)} kg from now on")
+                }
+                OutlinedButton(onClick = { onUse(newWeight, false) }, enabled = canUse) {
+                    Text("Only for today")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
 /** A weight with up to two decimals and no trailing zeros, e.g. "60", "62.5" or "1.25". */
 private fun formatKg(kg: Double): String =
     String.format(Locale.US, "%.2f", kg).trimEnd('0').trimEnd('.')
@@ -1217,9 +1366,12 @@ private fun CurrentExerciseCard(
     exercise: ExerciseWithPerformanceHistory,
     isWarmUp: Boolean,
     weightStacks: List<WeightStack>,
+    onChangeWeight: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
+        onClick = onChangeWeight,
+        enabled = !isWarmUp,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
