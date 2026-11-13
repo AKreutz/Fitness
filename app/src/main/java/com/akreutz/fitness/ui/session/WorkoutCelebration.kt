@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.akreutz.fitness.ui.theme.HeartRateCoral
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -76,6 +78,7 @@ private class ConfettiPiece(
 @Composable
 internal fun WorkoutCompleteContent(
     personalRecords: Int,
+    heartRateSaved: Boolean?,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -118,7 +121,9 @@ internal fun WorkoutCompleteContent(
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             }
         }
-        delay(if (isRecord) RECORD_SHOW_MILLIS else NORMAL_SHOW_MILLIS)
+        // A line about the heart rate stays up a little longer, so it can be read before the screen closes.
+        val showMillis = if (isRecord) RECORD_SHOW_MILLIS else NORMAL_SHOW_MILLIS
+        delay(if (heartRateSaved != null) maxOf(showMillis, HEART_RATE_SHOW_MILLIS) else showMillis)
         if (!finished) {
             finished = true
             currentOnDone()
@@ -230,6 +235,9 @@ internal fun WorkoutCompleteContent(
                 if (isRecord) {
                     PersonalRecordLine(personalRecords)
                 }
+                if (heartRateSaved != null) {
+                    HeartRateSavedLine(heartRateSaved)
+                }
             }
         }
     }
@@ -255,5 +263,26 @@ private fun PersonalRecordLine(personalRecords: Int) {
     }
 }
 
+/** Says whether the watch's heart rate readings were saved with the workout, shown when a watch was there. */
+@Composable
+private fun HeartRateSavedLine(saved: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = null,
+            tint = if (saved) HeartRateCoral else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = if (saved) "Heart rate saved" else "Heart rate not saved",
+            style = MaterialTheme.typography.titleMedium,
+            color = if (saved) HeartRateCoral else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private const val HEART_RATE_SHOW_MILLIS = 3500L
 private const val BADGE_CENTER_FRACTION = 0.45f
 private const val GRAVITY = 0.9f

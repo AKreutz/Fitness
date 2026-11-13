@@ -104,11 +104,14 @@ sealed interface WorkoutSessionUiState {
      * The user has gone through every exercise and the session is saved. [personalRecords] is how
      * many of its exercises were done at a heavier weight than ever before. [sessionId] is the id
      * it was saved under, and [heartRateSaved] whether the watch's heart rate readings were saved with it.
+     * [heartRateExpected] is whether a watch was there to measure it, so a session without one need not say
+     * its heart rate was not saved.
      */
     data class Finished(
         val personalRecords: Int,
         val sessionId: String,
         val heartRateSaved: Boolean,
+        val heartRateExpected: Boolean = false,
     ) : WorkoutSessionUiState
 }
 
@@ -150,8 +153,12 @@ sealed interface SetProgress {
 private const val RECOVERY_TICK_MILLIS = 1_000L
 private const val STATE_SETTLE_MILLIS = 120L
 
-/** How long a finished session waits for the watch's heart rate readings once they have stopped coming. */
-private const val HEART_RATE_IDLE_MILLIS = 20_000L
+/**
+ * How long a finished session waits for the watch's heart rate readings once they have stopped coming. Longer than
+ * the watch's longest pause between tries (its 30 second wait before starting over), so the phone does not give up
+ * while the watch is still retrying.
+ */
+private const val HEART_RATE_IDLE_MILLIS = 90_000L
 
 /**
  * Drives a single guided workout session: walks the user through [workoutId]'s exercises in
@@ -212,6 +219,9 @@ class WorkoutSessionViewModel(
 
     /** Whether the watch's heart rate readings were saved with the session; set just before [readyToFinish]. */
     private var heartRateSaved = false
+
+    /** Whether a watch was there to measure heart rate for the session; set just before [readyToFinish]. */
+    private var heartRateExpected = false
 
     /** Whether the finished session is waiting for the watch's heart rate readings before it is saved. */
     private val waitingForHeartRate = MutableStateFlow(false)
@@ -302,6 +312,7 @@ class WorkoutSessionViewModel(
                     personalRecords,
                     finishedSessionId.orEmpty(),
                     heartRateSaved,
+                    heartRateExpected,
                 )
                 progress.waitingForHeartRate -> WorkoutSessionUiState.WaitingForHeartRate(
                     personalRecords,
@@ -542,7 +553,8 @@ class WorkoutSessionViewModel(
                 finishedSessionId = sessionId
                 // The session ends now, however long the readings take to arrive.
                 val completedAt = Instant.now()
-                val readings = if (watchBridge.expectsHeartRate()) awaitHeartRate(sessionId) else null
+                heartRateExpected = watchBridge.expectsHeartRate()
+                val readings = if (heartRateExpected) awaitHeartRate(sessionId) else null
                 repository.recordPerceivedEfforts(
                     workoutId,
                     collectedRatings,

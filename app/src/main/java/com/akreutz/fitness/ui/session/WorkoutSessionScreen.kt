@@ -211,6 +211,7 @@ fun WorkoutSessionScreen(
             )
             is WorkoutSessionUiState.Finished -> WorkoutCompleteContent(
                 personalRecords = state.personalRecords,
+                heartRateSaved = if (state.heartRateExpected) state.heartRateSaved else null,
                 onDone = onFinish,
                 modifier = Modifier.padding(innerPadding),
             )
