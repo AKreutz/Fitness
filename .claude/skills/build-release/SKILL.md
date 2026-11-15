@@ -3,7 +3,8 @@ name: build-release
 description: >
   Cuts a new release of the Fitness Android app: bumps the version in app/build.gradle.kts,
   commits it to develop, fast-forward merges develop into main, builds a signed release APK, and
-  copies it into releases/vX.Y/. Use this whenever the user asks to "build a release", "cut a
+  copies it into releases/vX.Y/, pushes develop and main, and installs the APK on the phone. Only
+  asks for the new version name. Use this whenever the user asks to "build a release", "cut a
   release", "ship a release build", "bump the version and build", or similar for this project —
   including when they just say "let's release" or ask for a signed APK.
 ---
@@ -12,10 +13,15 @@ description: >
 
 This is the release process for the Fitness app (an Android/Kotlin/Compose project). It takes the
 repo from "develop has the changes we want to ship" to "main is updated and there's a signed APK
-ready," stopping right before anything gets pushed so the user can look things over.
+ready," then pushes both branches and installs the APK on the user's phone.
+
+The only question to ask the user is the new `versionName` (step 2). Everything else — bump,
+commit, merge, build, copy, push, install — runs automatically with no confirmation prompts. The
+user has pre-authorized the push and the phone install by invoking this skill.
 
 Work through the steps below in order. Each one depends on the last succeeding, so don't skip ahead
-if something fails — stop and surface the problem instead of guessing at a fix.
+if something fails — stop and surface the problem instead of guessing at a fix. A failure at any
+step also means the later steps (especially the push) must not run.
 
 ## 1. Confirm the starting state
 
@@ -34,9 +40,10 @@ Read `app/build.gradle.kts` and find `versionCode` and `versionName` in `default
 
 - **versionCode**: increment by 1 automatically (Play Store requires each upload to have a higher
   versionCode than the last, so there's no real judgment call here).
-- **versionName**: ask the user what it should be. Default to suggesting the next minor bump
-  (e.g. `1.0` → `1.1`) since that's this project's pattern so far, but let them override it —
-  they may want a major bump, a patch, or something else.
+- **versionName**: ask the user what it should be — this is the one and only prompt in the whole
+  process. Default to suggesting the next minor bump (e.g. `1.0` → `1.1`) since that's this
+  project's pattern so far, but let them override it — they may want a major bump, a patch, or
+  something else. Once they answer, don't ask anything else.
 
 Edit the two lines in place. Don't touch anything else in the file.
 
@@ -90,38 +97,32 @@ into it. This folder is for local tracking across versions, not for committing �
 your judgment) if it isn't already, since these are large binary build outputs that don't belong
 in git history.
 
-## 7. Stop and report — do not push
+## 7. Push both branches
 
-Summarize for the user:
-
-- Old version → new version (versionCode and versionName)
-- The commit made on develop
-- That main was fast-forwarded to match
-- Where the APK ended up
-
-Then explicitly ask whether to push. If they say yes, push both branches:
+Push without asking, as long as every earlier step succeeded:
 
 ```
 git push origin develop main
 ```
 
-Never push without this explicit confirmation, even if the user seems to be in a hurry — a push
-to `main` on this repo is the one step in this whole process that's genuinely hard to undo cleanly.
+Never force-push. If the push is rejected (e.g. origin has new commits), stop and report it rather
+than pulling, merging or forcing.
 
-## 8. Offer to install the release build on the phone
+## 8. Install the release build on the phone
 
-After the push question is resolved (regardless of whether they pushed), ask whether to install
-this release build on their physical phone. Unlike day-to-day dev/debug testing on this project —
-which is emulator-only — a finished, signed release build is exactly what the phone is for, so
-installing it there is fine.
+Install without asking. A finished, signed release build is exactly what the phone is for (unlike
+day-to-day dev/debug testing on this project, which is emulator-only).
+
+`adb` is usually not on PATH; it lives at `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`.
 
 The phone is used over Wi-Fi debugging (phone IP `192.168.178.21`), so it shows up in `adb devices`
-as `192.168.178.21:<port>` rather than a USB serial. The port changes whenever Wireless debugging is
-toggled or the phone rejoins the network, so if the phone isn't listed, find the current port with
-`adb mdns services` (look for `_adb-tls-connect` on 192.168.178.21) and run
-`adb connect 192.168.178.21:<port>`. Some mDNS entries are stale and refuse the connection — try the
-others. If it asks for pairing, the user needs to supply the pairing IP:port and code from
-Developer options → Wireless debugging → "Pair device with pairing code".
+as `192.168.178.21:<port>` or as an `adb-<serial>._adb-tls-connect._tcp` mDNS name rather than a USB
+serial. The port changes whenever Wireless debugging is toggled or the phone rejoins the network, so
+if the phone isn't listed, find the current port with `adb mdns services` (look for
+`_adb-tls-connect` on 192.168.178.21) and run `adb connect 192.168.178.21:<port>`. Some mDNS entries
+are stale and refuse the connection — try the others. If it asks for pairing, the user needs to
+supply the pairing IP:port and code from Developer options → Wireless debugging → "Pair device with
+pairing code" — that's the one case where it's fine to stop and ask.
 
 Check `adb devices` for a connected physical device (not an emulator, which shows as
 `emulator-####`). If one is connected:
@@ -133,3 +134,13 @@ adb install -r releases/v<versionName>/app-release.apk
 If no physical device is connected, say so and skip this step rather than falling back to the
 emulator — the point of this step is to get the release onto the actual phone, not to run it
 somewhere else.
+
+## 9. Report
+
+Summarize for the user:
+
+- Old version → new version (versionCode and versionName)
+- The commit made on develop
+- That main was fast-forwarded to match, and that both branches were pushed
+- Where the APK ended up
+- Whether it was installed on the phone
