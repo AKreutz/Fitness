@@ -67,7 +67,7 @@ private val axisDateFormatter: DateTimeFormatter
     get() = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)
 
 /**
- * Shows a separate volume-over-time chart (weight × reps × sets) for each exercise in the user's active training plan,
+ * Shows a separate estimated-1RM-over-time chart for each exercise in the user's active training plan,
  * grouped under its workout, in plan order. Exercises with fewer than two logged data points
  * (nothing to draw a line between) show a placeholder message instead of an empty chart.
  */
@@ -210,7 +210,7 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
                 if (latest != null && first != null) {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "${latest.volumeKg.formatDecimal()} kg",
+                            text = "${latest.oneRepMaxKg.formatDecimal()} kg",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
@@ -221,8 +221,8 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         } else {
-                            val diff = latest.volumeKg - first.volumeKg
-                            val percent = if (first.volumeKg > 0.0) diff / first.volumeKg * 100.0 else 0.0
+                            val diff = latest.oneRepMaxKg - first.oneRepMaxKg
+                            val percent = if (first.oneRepMaxKg > 0.0) diff / first.oneRepMaxKg * 100.0 else 0.0
                             Text(
                                 text = "${diff.formatSigned()} kg · ${percent.formatSigned()}%",
                                 style = MaterialTheme.typography.labelMedium,
@@ -252,7 +252,7 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
                     )
                 }
             } else {
-                VolumeLineChart(
+                OneRepMaxLineChart(
                     dataPoints = exercise.dataPoints,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -265,8 +265,8 @@ private fun ExerciseChartCard(exercise: ExerciseProgress, modifier: Modifier = M
 
 /**
  * A summary card, shown above every workout's exercise charts, plotting the training plan's
- * overall progress: for each session, the sum of every exercise's percentage weight increase
- * compared to its own starting weight (see [SummaryDataPoint]), colored by how hard that session
+ * overall progress: for each session, the sum of every exercise's percentage estimated-1RM increase
+ * compared to its own starting 1RM (see [SummaryDataPoint]), colored by how hard that session
  * felt on average. Shows a placeholder message instead of an empty chart if there's fewer than
  * two sessions to plot.
  */
@@ -316,7 +316,7 @@ private fun SummaryProgressCard(summary: List<SummaryDataPoint>, modifier: Modif
                 }
             }
             Text(
-                text = "Summed volume increase across all exercises",
+                text = "Summed estimated 1RM increase across all exercises",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
@@ -370,21 +370,21 @@ private fun EffortLegend(modifier: Modifier = Modifier) {
 }
 
 /**
- * A single-series line chart of weight (kg) over time: a thin accent-colored line connecting each
- * [WeightDataPoint], with the area under each segment filled in the color of the [PerceivedEffort]
- * recorded at that segment's right-hand (later) point, and each point's own marker dot colored the
- * same way (green/yellow/red for easy/medium/hard, the same colors used for the effort bar
- * elsewhere in the app). Recessive horizontal gridlines mark the min/max weight (direct-labeled on
- * the left), and the first/last dates are labeled on the x-axis.
+ * A single-series line chart of estimated one-rep max (kg) over time: a thin accent-colored line
+ * connecting each [OneRepMaxDataPoint], with the area under each segment filled in the color of
+ * the [PerceivedEffort] recorded at that segment's right-hand (later) point, and each point's own
+ * marker dot colored the same way (green/yellow/red for easy/medium/hard, the same colors used for
+ * the effort bar elsewhere in the app). Recessive horizontal gridlines mark the min/max value
+ * (direct-labeled on the left), and the first/last dates are labeled on the x-axis.
  */
 @Composable
-internal fun WeightLineChart(dataPoints: List<WeightDataPoint>, modifier: Modifier = Modifier) {
+internal fun OneRepMaxLineChart(dataPoints: List<OneRepMaxDataPoint>, modifier: Modifier = Modifier) {
     val effortColors = MaterialTheme.effortColors
     LineChart(
         points = dataPoints.map {
             LineChartPoint(
                 completedAt = it.completedAt,
-                value = it.weightKg,
+                value = it.oneRepMaxKg,
                 pointColor = effortColors.forEffort(it.perceivedEffort),
                 fillColor = effortColors.forEffort(it.perceivedEffort),
             )
@@ -395,31 +395,10 @@ internal fun WeightLineChart(dataPoints: List<WeightDataPoint>, modifier: Modifi
 }
 
 /**
- * Like [WeightLineChart], but plotting each [VolumeDataPoint]'s volume (weight × reps × sets, in kg)
- * instead of the weight alone, so adding reps at the same weight shows as progress too.
- */
-@Composable
-private fun VolumeLineChart(dataPoints: List<VolumeDataPoint>, modifier: Modifier = Modifier) {
-    val effortColors = MaterialTheme.effortColors
-    LineChart(
-        points = dataPoints.map {
-            LineChartPoint(
-                completedAt = it.completedAt,
-                value = it.volumeKg,
-                pointColor = effortColors.forEffort(it.perceivedEffort),
-                fillColor = effortColors.forEffort(it.perceivedEffort),
-            )
-        },
-        formatValueLabel = { it.formatDecimal() },
-        modifier = modifier,
-    )
-}
-
-/**
- * A single-series line chart of a training plan's summed percentage weight increase (see
+ * A single-series line chart of a training plan's summed percentage estimated-1RM increase (see
  * [SummaryDataPoint]) over time: a thin accent-colored line connecting each session, with the
  * area under each segment filled in the color of that session's [SummaryDataPoint.averageEffort]
- * (same treatment as [WeightLineChart], so effort is visible without changing where a session
+ * (same treatment as [OneRepMaxLineChart], so effort is visible without changing where a session
  * sits on the line). Recessive horizontal gridlines mark the min/max value (direct-labeled on the
  * left), and the first/last dates are labeled on the x-axis.
  */
@@ -449,7 +428,7 @@ private data class LineChartPoint(
 )
 
 /**
- * The line-chart primitive shared by [WeightLineChart] and [SummaryLineChart]: an accent-colored
+ * The line-chart primitive shared by [OneRepMaxLineChart] and [SummaryLineChart]: an accent-colored
  * line connecting each [LineChartPoint] in order, the area under each segment filled (at reduced
  * alpha) in that segment's later point's [LineChartPoint.fillColor], and a marker dot per point in
  * its own [LineChartPoint.pointColor]. Recessive horizontal gridlines mark the min/max value

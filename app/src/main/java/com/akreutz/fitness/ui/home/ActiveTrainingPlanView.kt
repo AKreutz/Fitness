@@ -58,8 +58,8 @@ import com.akreutz.fitness.data.model.repsDoneAt
 import com.akreutz.fitness.ui.common.AddExerciseDialog
 import com.akreutz.fitness.ui.common.staggeredEntrance
 import com.akreutz.fitness.ui.profile.toDraft
-import com.akreutz.fitness.ui.progress.WeightDataPoint
-import com.akreutz.fitness.ui.progress.WeightLineChart
+import com.akreutz.fitness.ui.progress.OneRepMaxLineChart
+import com.akreutz.fitness.ui.progress.oneRepMaxHistory
 import com.akreutz.fitness.ui.theme.effortColors
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -155,7 +155,7 @@ fun ActiveTrainingPlanView(
 /**
  * Bottom sheet with an exercise's details. From the top: the name and workout with an Edit button,
  * the current weight with the same effort bar as the card, the prescription as three tiles, a
- * chart of the weight used over time with its overall change and an effort legend, and the three
+ * chart of the estimated 1RM over time with its overall change and an effort legend, and the three
  * most recent sessions. While there are fewer than two sessions to chart, a hint replaces the chart.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -257,7 +257,8 @@ private fun ExerciseDetailsSheet(
                 )
             }
 
-            if (history.size < 2) {
+            val oneRepMaxPoints = remember(exercise) { exercise.oneRepMaxHistory() }
+            if (oneRepMaxPoints.size < 2) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -273,7 +274,7 @@ private fun ExerciseDetailsSheet(
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                     Text(
-                        text = if (history.isEmpty()) {
+                        text = if (oneRepMaxPoints.isEmpty()) {
                             "Your progress chart appears after the first finished workout with this exercise."
                         } else {
                             "Your progress chart appears after one more finished workout with this exercise."
@@ -283,9 +284,9 @@ private fun ExerciseDetailsSheet(
                     )
                 }
             } else {
-                val change = history.last().value.weightKg - history.first().value.weightKg
-                val percent = if (history.first().value.weightKg > 0.0) {
-                    change / history.first().value.weightKg * 100.0
+                val change = oneRepMaxPoints.last().oneRepMaxKg - oneRepMaxPoints.first().oneRepMaxKg
+                val percent = if (oneRepMaxPoints.first().oneRepMaxKg > 0.0) {
+                    change / oneRepMaxPoints.first().oneRepMaxKg * 100.0
                 } else {
                     0.0
                 }
@@ -295,7 +296,7 @@ private fun ExerciseDetailsSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Bottom,
                     ) {
-                        Text(text = "Weight over time", style = MaterialTheme.typography.titleMedium)
+                        Text(text = "Estimated 1RM over time", style = MaterialTheme.typography.titleMedium)
                         Text(
                             text = String.format(Locale.US, "%+.1f kg · %+.1f%%", change, percent),
                             style = MaterialTheme.typography.labelLarge,
@@ -307,10 +308,8 @@ private fun ExerciseDetailsSheet(
                             },
                         )
                     }
-                    WeightLineChart(
-                        dataPoints = history.map {
-                            WeightDataPoint(it.key, it.value.weightKg, it.value.perceivedEffort)
-                        },
+                    OneRepMaxLineChart(
+                        dataPoints = oneRepMaxPoints,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(140.dp),

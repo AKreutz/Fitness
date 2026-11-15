@@ -15,29 +15,42 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.Instant
 
-/** One recorded weight for an exercise, at the point in time it was logged. */
-data class WeightDataPoint(
-    val completedAt: Instant,
-    val weightKg: Double,
-    val perceivedEffort: PerceivedEffort,
-)
-
-/** An exercise's logged weight history, ready to chart, in chronological order. */
+/** An exercise's estimated-1RM history, ready to chart, in chronological order. */
 data class ExerciseProgress(
     val exerciseId: String,
     val exerciseName: String,
-    val dataPoints: List<VolumeDataPoint>,
+    val dataPoints: List<OneRepMaxDataPoint>,
 )
 
 /**
- * One performance's training volume: weight × reps per set × number of sets, at the point in time
- * it was logged.
+ * One performance's estimated one-rep max (see [estimatedOneRepMaxKg]), at the point in time it
+ * was logged.
  */
-data class VolumeDataPoint(
+data class OneRepMaxDataPoint(
     val completedAt: Instant,
-    val volumeKg: Double,
+    val oneRepMaxKg: Double,
     val perceivedEffort: PerceivedEffort,
 )
+
+/**
+ * The Epley estimate of the heaviest single rep achievable from a set of [reps] at [weightKg]:
+ * `weight × (1 + reps / 30)`. A single rep is its own one-rep max.
+ */
+fun estimatedOneRepMaxKg(weightKg: Double, reps: Int): Double =
+    if (reps <= 1) weightKg else weightKg * (1 + reps / 30.0)
+
+/**
+ * Each performance's estimated one-rep max, in chronological order. Reps aren't stored, so
+ * they're replayed per session (see [repsDoneAt]); a performance whose reps can't be
+ * determined is skipped.
+ */
+fun ExerciseWithPerformanceHistory.oneRepMaxHistory(): List<OneRepMaxDataPoint> =
+    performanceHistory.entries
+        .sortedBy { it.key }
+        .mapNotNull { (completedAt, entry) ->
+            val reps = repsDoneAt(completedAt) ?: return@mapNotNull null
+            OneRepMaxDataPoint(completedAt, estimatedOneRepMaxKg(entry.weightKg, reps), entry.perceivedEffort)
+        }
 
 /** One workout's exercises, each with its own chartable history. */
 data class WorkoutProgress(
@@ -48,8 +61,8 @@ data class WorkoutProgress(
 
 /**
  * One session's overall progress: the sum, across every exercise that was performed at
- * [completedAt], of that exercise's percentage weight increase compared to its own first-ever
- * recorded weight. E.g. if two exercises were each performed at 10% above their starting weight
+ * [completedAt], of that exercise's percentage estimated-1RM increase compared to its own first-ever
+ * estimated 1RM. E.g. if two exercises were each performed at 10% above their starting 1RM
  * in the same session, this is 20.0. [averageEffort] is the average [PerceivedEffort] across
  * those same exercises (rounded up on a tie), for showing how hard the session felt without
  * folding it into [summedPercentIncrease] itself — so a session's position on the chart always
@@ -73,7 +86,7 @@ sealed interface ProgressUiState {
 
 /**
  * Feeds the progress screen: for the user's active [com.akreutz.fitness.data.model.TrainingPlan],
- * every workout's exercises turned into a chartable weight-over-time series (see
+ * every workout's exercises turned into a chartable estimated-1RM-over-time series (see
  * [ExerciseWithPerformanceHistory.performanceHistory]), grouped and ordered the same way the plan
  * itself is.
  */
@@ -106,27 +119,14 @@ class ProgressViewModel(repository: TrainingPlanRepository) : ViewModel() {
         ExerciseProgress(
             exerciseId = exercise.id,
             exerciseName = exercise.name,
-            dataPoints = volumeHistory(),
+            dataPoints = oneRepMaxHistory(),
         )
 
     /**
-     * Each performance's volume (weight × reps per set × sets), in chronological order. Reps aren't
-     * stored, so they're replayed per session (see [repsDoneAt]); the set count is the exercise's
-     * current one.
-     */
-    private fun ExerciseWithPerformanceHistory.volumeHistory(): List<VolumeDataPoint> =
-        performanceHistory.entries
-            .sortedBy { it.key }
-            .map { (completedAt, entry) ->
-                val reps = repsDoneAt(completedAt) ?: 0
-                VolumeDataPoint(completedAt, entry.weightKg * reps * exercise.sets, entry.perceivedEffort)
-            }
-
-    /**
      * For every session timestamp any of [this] was performed at, the sum across those exercises
-     * of the percentage weight increase compared to each exercise's own first-ever recorded
-     * weight, together with their average [PerceivedEffort] (see [SummaryDataPoint]), in
-     * chronological order. An exercise with no recorded weight yet (nothing to compare against)
+     * of the percentage estimated-1RM increase compared to each exercise's own first-ever
+     * estimated 1RM, together with their average [PerceivedEffort] (see [SummaryDataPoint]), in
+     * chronological order. An exercise with no recorded 1RM yet (nothing to compare against)
      * is simply excluded from every sum.
      */
     private fun List<ExerciseWithPerformanceHistory>.toSummary(): List<SummaryDataPoint> {
@@ -134,10 +134,10 @@ class ProgressViewModel(repository: TrainingPlanRepository) : ViewModel() {
 
         val entriesByTimestamp = mutableMapOf<Instant, MutableList<SessionEntry>>()
         forEach { exercise ->
-            val history = exercise.volumeHistory()
-            val startingVolume = history.firstOrNull()?.volumeKg?.takeIf { it > 0.0 } ?: return@forEach
+            val history = exercise.oneRepMaxHistory()
+            val startingOneRepMax = history.firstOrNull()?.oneRepMaxKg?.takeIf { it > 0.0 } ?: return@forEach
             history.forEach { point ->
-                val percentIncrease = (point.volumeKg - startingVolume) / startingVolume * 100.0
+                val percentIncrease = (point.oneRepMaxKg - startingOneRepMax) / startingOneRepMax * 100.0
                 entriesByTimestamp.getOrPut(point.completedAt) { mutableListOf() } +=
                     SessionEntry(percentIncrease, point.perceivedEffort)
             }
